@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
+import { Pencil, Check, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '../store/authStore'
 import { useFinanceStore } from '../store/financeStore'
@@ -18,134 +19,223 @@ const CATEGORIES = [
 ]
 
 const WALLETS = [
-  { key: 'cash_balance', label: 'Cash',  icon: '💵', color: '#22C55E' },
-  { key: 'upi_balance',  label: 'UPI',   icon: '📲', color: '#3B82F6' },
-  { key: 'card_balance', label: 'Card',  icon: '💳', color: '#A855F7' },
+  { key: 'cash_balance', label: 'Cash', icon: '💵', color: '#22C55E', payKey: 'cash' },
+  { key: 'upi_balance',  label: 'UPI',  icon: '📲', color: '#3B82F6', payKey: 'upi'  },
+  { key: 'card_balance', label: 'Card', icon: '💳', color: '#A855F7', payKey: 'card' },
 ]
 
-/* ── Rupee input field ─────────────────────────────────────── */
-function RupeeInput({ value, onChange, placeholder = '0', label, sub }) {
+/* ── Pencil edit icon pinned to top-right ─────────────────── */
+function EditCornerBtn({ onEdit }) {
   return (
-    <div>
-      {label && (
-        <div className="flex justify-between mb-1.5">
-          <span className="text-xs font-semibold" style={{ color: 'var(--sub)' }}>{label}</span>
-          {sub && <span className="text-xs" style={{ color: 'var(--sub)' }}>{sub}</span>}
-        </div>
-      )}
-      <div className="relative">
-        <span
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-base font-bold"
-          style={{ color: '#F97316' }}
-        >₹</span>
+    <button
+      onClick={onEdit}
+      className="absolute top-3 right-3 w-8 h-8 rounded-xl flex items-center justify-center neu-btn"
+      style={{ color: '#F97316' }}
+    >
+      <Pencil size={13} />
+    </button>
+  )
+}
+
+/* ── Tiny inline input that replaces the value when editing ── */
+function EditInline({ value, onSave, onCancel }) {
+  const [draft, setDraft] = useState(value)
+  const ref = useRef(null)
+  useEffect(() => { ref.current?.focus(); ref.current?.select() }, [])
+
+  return (
+    <div className="flex items-center gap-2 mt-1">
+      <div className="relative flex-1">
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-sm" style={{ color: '#F97316' }}>₹</span>
         <input
-          type="number"
-          min={0}
-          value={value || ''}
-          onChange={e => onChange(Number(e.target.value) || 0)}
-          placeholder={placeholder}
-          className="neu-input pl-8 text-base font-semibold"
-          style={{ color: 'var(--text)' }}
+          ref={ref}
+          type="number" min={0}
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') onSave(Number(draft) || 0); if (e.key === 'Escape') onCancel() }}
+          className="w-full rounded-xl text-sm font-bold pl-7 pr-3 py-2 outline-none border-2"
+          style={{
+            background: 'var(--card)',
+            color: 'var(--text)',
+            borderColor: '#F97316',
+            boxShadow: 'inset 2px 2px 5px var(--shadow-dark), inset -2px -2px 5px var(--shadow-light)',
+          }}
         />
       </div>
+      <button onClick={() => onSave(Number(draft) || 0)}
+        className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+        style={{ background: '#22C55E', color: '#fff' }}>
+        <Check size={14} />
+      </button>
+      <button onClick={onCancel}
+        className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 neu-btn">
+        <X size={14} />
+      </button>
     </div>
   )
 }
 
-/* ── Category limit row ─────────────────────────────────────── */
-function CategoryLimitRow({ cat, spent, limit, onSetLimit }) {
+/* ── Dashboard-style stat card with edit ─────────────────── */
+function BudgetStatCard({ icon, label, value, sub, color, iconBg, onSave }) {
+  const [editing, setEditing] = useState(false)
+  return (
+    <div className="neu-card p-4 relative">
+      {!editing && <EditCornerBtn onEdit={() => setEditing(true)} />}
+      <div className="icon-box mb-3" style={{ fontSize: '1.3rem', background: iconBg || 'var(--card)' }}>
+        {icon}
+      </div>
+      <div className="text-xs font-medium mb-1" style={{ color: 'var(--sub)' }}>{label}</div>
+      {editing ? (
+        <EditInline
+          value={value}
+          onSave={v => { onSave(v); setEditing(false) }}
+          onCancel={() => setEditing(false)}
+        />
+      ) : (
+        <>
+          <div className="text-2xl font-bold" style={{ color: color || 'var(--text)' }}>
+            ₹{Number(value).toLocaleString('en-IN')}
+          </div>
+          {sub && <div className="text-[11px] mt-1" style={{ color: 'var(--sub)' }}>{sub}</div>}
+        </>
+      )}
+    </div>
+  )
+}
+
+/* ── Wallet card — stat card style ───────────────────────── */
+function WalletCard({ wallet, balance, spent, onSave }) {
+  const [editing, setEditing] = useState(false)
+  const remaining = balance - spent
+  const pct   = balance > 0 ? Math.min(100, (spent / balance) * 100) : 0
+  const barColor = pct < 60 ? wallet.color : pct < 85 ? '#F59E0B' : '#EF4444'
+
+  return (
+    <div className="neu-card p-4 relative">
+      {!editing && <EditCornerBtn onEdit={() => setEditing(true)} />}
+
+      {/* Icon + label */}
+      <div className="icon-box mb-3" style={{ fontSize: '1.2rem', background: `${wallet.color}20` }}>
+        {wallet.icon}
+      </div>
+      <div className="text-xs font-medium mb-1" style={{ color: 'var(--sub)' }}>{wallet.label}</div>
+
+      {/* Value */}
+      {editing ? (
+        <EditInline
+          value={balance}
+          onSave={v => { onSave(v); setEditing(false) }}
+          onCancel={() => setEditing(false)}
+        />
+      ) : (
+        <div className="text-2xl font-bold" style={{ color: wallet.color }}>
+          ₹{Number(balance).toLocaleString('en-IN')}
+        </div>
+      )}
+
+      {/* Spent / remaining */}
+      <div className="flex gap-2 mt-1 text-[10px]">
+        <span style={{ color: '#EF4444' }}>-₹{spent.toLocaleString('en-IN')}</span>
+        <span style={{ color: remaining >= 0 ? '#22C55E' : '#EF4444', fontWeight: 600 }}>
+          {remaining >= 0 ? '' : '-'}₹{Math.abs(remaining).toLocaleString('en-IN')} left
+        </span>
+      </div>
+
+      {/* Progress bar */}
+      {balance > 0 && (
+        <div className="mt-3 h-1.5 rounded-full overflow-hidden"
+          style={{ background: 'var(--shadow-dark)', opacity: 0.3 + 0.7 }}>
+          <div className="neu-inset p-0.5 rounded-full mt-2">
+            <div className="h-1.5 rounded-full transition-all duration-700"
+              style={{ width: `${pct}%`, background: barColor, minWidth: pct > 0 ? 6 : 0 }} />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ── Category limit card — stat card style ───────────────── */
+function CategoryCard({ cat, spent, limit, onSave }) {
+  const [editing, setEditing] = useState(false)
   const pct   = limit > 0 ? Math.min(100, Math.round((spent / limit) * 100)) : 0
   const color = pct < 60 ? '#22C55E' : pct < 85 ? '#F59E0B' : '#EF4444'
 
   return (
-    <div className="neu-card p-4">
-      {/* Header row */}
-      <div className="flex items-center gap-3 mb-3">
-        <div className="icon-box text-xl">{cat.icon}</div>
-        <div className="flex-1">
-          <div className="text-sm font-bold" style={{ color: 'var(--text)' }}>{cat.name}</div>
-          <div className="text-xs" style={{ color: 'var(--sub)' }}>
-            Spent: ₹{spent.toLocaleString('en-IN')}
-            {limit > 0 && ` / ₹${limit.toLocaleString('en-IN')}`}
-          </div>
+    <div className="neu-card p-4 relative">
+      {/* % badge top-right (behind edit btn when editing) */}
+      {!editing && pct > 0 && (
+        <div className="absolute top-9 right-3 text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+          style={{ background: `${color}22`, color }}>
+          {pct}%
         </div>
-        {pct > 0 && (
-          <span
-            className="text-xs font-bold px-2 py-0.5 rounded-full"
-            style={{ background: `${color}22`, color }}
-          >
-            {pct}%
-          </span>
-        )}
+      )}
+      {!editing && <EditCornerBtn onEdit={() => setEditing(true)} />}
+
+      {/* Icon */}
+      <div className="icon-box mb-3" style={{ fontSize: '1.2rem', background: `${cat.color}18` }}>
+        {cat.icon}
+      </div>
+      <div className="text-xs font-medium mb-1" style={{ color: 'var(--sub)' }}>{cat.name}</div>
+
+      {/* Limit value */}
+      {editing ? (
+        <EditInline
+          value={limit}
+          onSave={v => { onSave(v); setEditing(false) }}
+          onCancel={() => setEditing(false)}
+        />
+      ) : (
+        <div className="text-xl font-bold" style={{ color: limit > 0 ? 'var(--text)' : 'var(--sub)' }}>
+          {limit > 0 ? `₹${Number(limit).toLocaleString('en-IN')}` : 'No limit'}
+        </div>
+      )}
+
+      {/* Spent */}
+      <div className="text-[11px] mt-1" style={{ color: 'var(--sub)' }}>
+        Spent ₹{spent.toLocaleString('en-IN')}
       </div>
 
       {/* Progress bar */}
       {limit > 0 && (
-        <div className="neu-inset p-1 rounded-full mb-3">
-          <div
-            className="h-2 rounded-full transition-all duration-700"
-            style={{
-              width: `${pct}%`,
-              background: `linear-gradient(90deg, ${color}, ${color}bb)`,
-              minWidth: pct > 0 ? 8 : 0,
-            }}
-          />
+        <div className="neu-inset p-0.5 rounded-full mt-3">
+          <div className="h-1.5 rounded-full transition-all duration-700"
+            style={{ width: `${pct}%`, background: color, minWidth: pct > 0 ? 6 : 0 }} />
         </div>
       )}
-
-      {/* Number input */}
-      <RupeeInput
-        value={limit}
-        onChange={onSetLimit}
-        placeholder="Set limit"
-        label="Monthly limit"
-      />
     </div>
   )
 }
 
-/* ── Main page ─────────────────────────────────────────────── */
+/* ── Main page ────────────────────────────────────────────── */
 export default function Budget() {
   const { user, profile, updateProfile } = useAuthStore()
   const { fetchAll, categories, budgets, upsertBudget, transactions } = useFinanceStore()
-  const [showAdd,  setShowAdd]  = useState(false)
-  const [saving,   setSaving]   = useState(false)
+  const [showAdd, setShowAdd] = useState(false)
 
-  // Overall budget
-  const [monthlyBudget,   setMonthlyBudget]   = useState(0)
-  const [alertThreshold,  setAlertThreshold]  = useState(80)
-
-  // Wallets (how much the user has in each)
-  const [cashBalance, setCashBalance] = useState(0)
-  const [upiBalance,  setUpiBalance]  = useState(0)
-  const [cardBalance, setCardBalance] = useState(0)
-
-  // Savings goal
-  const [goalName,   setGoalName]   = useState('')
-  const [goalAmount, setGoalAmount] = useState(0)
-  const [goalDate,   setGoalDate]   = useState('')
-
-  // Per-category limits
+  const [monthlyBudget,  setMonthlyBudget]  = useState(0)
+  const [alertThreshold, setAlertThreshold] = useState(80)
+  const [cashBalance,    setCashBalance]    = useState(0)
+  const [upiBalance,     setUpiBalance]     = useState(0)
+  const [cardBalance,    setCardBalance]    = useState(0)
+  const [goalName,       setGoalName]       = useState('')
+  const [goalAmount,     setGoalAmount]     = useState(0)
+  const [goalDate,       setGoalDate]       = useState('')
   const [categoryLimits, setCategoryLimits] = useState({})
 
   const now   = new Date()
   const month = now.getMonth() + 1
   const year  = now.getFullYear()
 
-  // Derive category spending from all transactions this month
   const monthTxs = transactions.filter(t => {
     const d = new Date(t.date)
     return d.getMonth() + 1 === month && d.getFullYear() === year
   })
-
-  // Spending by payment method this month
   const spentByMethod = { cash: 0, upi: 0, card: 0 }
   monthTxs.forEach(t => {
     const m = t.payment_method || 'upi'
     spentByMethod[m] = (spentByMethod[m] || 0) + Number(t.amount)
   })
-
-  // Spending by category
   const spentByCat = {}
   monthTxs.forEach(t => {
     const name = t.categories?.name || 'Other'
@@ -154,67 +244,44 @@ export default function Budget() {
 
   const dbCats = categories.length ? categories : CATEGORIES
 
-  /* Load data */
-  useEffect(() => {
-    if (user?.id) fetchAll(user.id)
-  }, [user?.id])
-
+  useEffect(() => { if (user?.id) fetchAll(user.id) }, [user?.id])
   useEffect(() => {
     if (!profile) return
-    setMonthlyBudget(profile.monthly_budget   || 0)
+    setMonthlyBudget(profile.monthly_budget    || 0)
     setAlertThreshold(profile.alert_threshold  || 80)
-    setCashBalance(profile.cash_balance  || 0)
+    setCashBalance(profile.cash_balance || 0)
     setUpiBalance(profile.upi_balance   || 0)
     setCardBalance(profile.card_balance  || 0)
-    setGoalName(profile.savings_goal_name   || '')
+    setGoalName(profile.savings_goal_name       || '')
     setGoalAmount(profile.savings_target_amount || 0)
-    setGoalDate(profile.savings_target_date   || '')
+    setGoalDate(profile.savings_target_date     || '')
   }, [profile])
-
   useEffect(() => {
     const limits = {}
     budgets.forEach(b => {
-      if (b.categories?.name && b.month === month && b.year === year) {
+      if (b.categories?.name && b.month === month && b.year === year)
         limits[b.categories.name] = b.limit_amount
-      }
     })
     setCategoryLimits(limits)
   }, [budgets])
 
-  /* Save all */
-  const handleSave = async () => {
-    setSaving(true)
-    try {
-      await updateProfile({
-        monthly_budget:        monthlyBudget,
-        alert_threshold:       alertThreshold,
-        cash_balance:          cashBalance,
-        upi_balance:           upiBalance,
-        card_balance:          cardBalance,
-        savings_goal_name:     goalName,
-        savings_target_amount: goalAmount,
-        savings_target_date:   goalDate || null,
-      })
-
-      for (const cat of dbCats) {
-        const limit = categoryLimits[cat.name]
-        if (limit > 0) {
-          await upsertBudget({
-            user_id:     user.id,
-            category_id: cat.id,
-            limit_amount: limit,
-            month,
-            year,
-          })
-        }
-      }
-      toast.success('Budget saved! 🎯')
-    } catch (err) {
-      toast.error('Failed: ' + err.message)
-    } finally {
-      setSaving(false)
-    }
+  const saveProfile = async (patch) => {
+    try { await updateProfile(patch); toast.success('Saved ✓') }
+    catch (e) { toast.error(e.message) }
   }
+  const saveCatLimit = async (catName, val) => {
+    const cat = dbCats.find(c => c.name === catName)
+    if (!cat?.id) { toast.error('Category not found'); return }
+    try {
+      await upsertBudget({ user_id: user.id, category_id: cat.id, limit_amount: val, month, year })
+      setCategoryLimits(prev => ({ ...prev, [catName]: val }))
+      toast.success(`${catName} limit saved ✓`)
+    } catch (e) { toast.error(e.message) }
+  }
+
+  const totalAvailable =
+    (cashBalance + upiBalance + cardBalance) -
+    (spentByMethod.cash + spentByMethod.upi + spentByMethod.card)
 
   return (
     <div className="page">
@@ -222,175 +289,108 @@ export default function Budget() {
         <Header />
         <div className="section-title mb-4">Budget & Limits</div>
 
-        {/* ── Wallet Balances ─────────────────────────────── */}
-        <div className="neu-card p-4 mb-4">
-          <div className="flex items-center gap-2 mb-4">
-            <span className="text-xl">👛</span>
-            <div>
-              <div className="text-sm font-bold" style={{ color: 'var(--text)' }}>My Wallets</div>
-              <div className="text-xs" style={{ color: 'var(--sub)' }}>Enter your current balance per method</div>
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-4">
-            {WALLETS.map(w => {
-              const bal  = w.key === 'cash_balance' ? cashBalance : w.key === 'upi_balance' ? upiBalance : cardBalance
-              const set  = w.key === 'cash_balance' ? setCashBalance : w.key === 'upi_balance' ? setUpiBalance : setCardBalance
-              const key  = w.key === 'cash_balance' ? 'cash' : w.key === 'upi_balance' ? 'upi' : 'card'
-              const spent = spentByMethod[key] || 0
-              const remaining = bal - spent
-
-              return (
-                <div key={w.key} className="neu-card-sm p-3">
-                  {/* Wallet header */}
-                  <div className="flex items-center gap-2 mb-3">
-                    <div
-                      className="icon-box text-xl"
-                      style={{ background: `${w.color}22`, color: w.color }}
-                    >
-                      {w.icon}
-                    </div>
-                    <div className="text-sm font-bold" style={{ color: 'var(--text)' }}>{w.label}</div>
-                    <div className="ml-auto flex gap-3 text-xs">
-                      <div className="text-right">
-                        <div style={{ color: '#EF4444' }}>-₹{spent.toLocaleString('en-IN')}</div>
-                        <div style={{ color: 'var(--sub)' }}>spent</div>
-                      </div>
-                      <div className="text-right">
-                        <div style={{ color: remaining >= 0 ? '#22C55E' : '#EF4444' }}>
-                          ₹{Math.abs(remaining).toLocaleString('en-IN')}
-                        </div>
-                        <div style={{ color: 'var(--sub)' }}>left</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Balance input */}
-                  <RupeeInput
-                    value={bal}
-                    onChange={set}
-                    placeholder="Enter balance"
-                    label={`${w.label} balance`}
-                  />
-
-                  {/* Spent progress bar */}
-                  {bal > 0 && (
-                    <div className="mt-2">
-                      <div className="neu-inset p-1 rounded-full">
-                        <div
-                          className="h-1.5 rounded-full transition-all duration-700"
-                          style={{
-                            width: `${Math.min(100, (spent / bal) * 100)}%`,
-                            background: w.color,
-                            minWidth: spent > 0 ? 6 : 0,
-                          }}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-
-          {/* Total remaining */}
-          <div className="mt-4 p-3 rounded-2xl flex justify-between items-center"
-            style={{ background: '#F97316' + '15' }}>
-            <span className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Total Available</span>
-            <span className="text-lg font-bold" style={{ color: '#F97316' }}>
-              ₹{(cashBalance + upiBalance + cardBalance - spentByMethod.cash - spentByMethod.upi - spentByMethod.card).toLocaleString('en-IN')}
-            </span>
-          </div>
+        {/* ── Wallets 3-col grid ───────────────────────── */}
+        <div className="text-xs font-bold mb-2 px-1" style={{ color: 'var(--sub)' }}>MY WALLETS</div>
+        <div className="grid grid-cols-3 gap-3 mb-3">
+          {WALLETS.map(w => {
+            const bal    = w.key === 'cash_balance' ? cashBalance : w.key === 'upi_balance' ? upiBalance : cardBalance
+            const setBal = w.key === 'cash_balance' ? setCashBalance : w.key === 'upi_balance' ? setUpiBalance : setCardBalance
+            return (
+              <WalletCard
+                key={w.key}
+                wallet={w}
+                balance={bal}
+                spent={spentByMethod[w.payKey] || 0}
+                onSave={v => { setBal(v); saveProfile({ [w.key]: v }) }}
+              />
+            )
+          })}
         </div>
 
-        {/* ── Monthly Budget ───────────────────────────────── */}
-        <div className="neu-card p-4 mb-4">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="icon-box text-xl icon-box-orange">🎯</div>
-            <div>
-              <div className="text-sm font-bold" style={{ color: 'var(--text)' }}>Monthly Spending Budget</div>
-              <div className="text-xs" style={{ color: 'var(--sub)' }}>Overall cap for this month</div>
-            </div>
-          </div>
-          <RupeeInput value={monthlyBudget} onChange={setMonthlyBudget} placeholder="e.g. 50000" />
+        {/* Total available */}
+        <div className="neu-card p-3 mb-5 flex justify-between items-center">
+          <span className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Total Available</span>
+          <span className="text-lg font-bold" style={{ color: '#F97316' }}>
+            ₹{totalAvailable.toLocaleString('en-IN')}
+          </span>
         </div>
 
-        {/* ── Alert Threshold ──────────────────────────────── */}
-        <div className="neu-card p-4 mb-4">
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <div className="text-sm font-bold" style={{ color: 'var(--text)' }}>Alert Threshold</div>
-              <div className="text-xs" style={{ color: 'var(--sub)' }}>Warn me when budget is {alertThreshold}% used</div>
-            </div>
-            <div className="text-xl font-bold" style={{ color: '#F97316' }}>{alertThreshold}%</div>
-          </div>
-          <input
-            type="range" min={50} max={95} step={5}
-            value={alertThreshold}
-            onChange={e => setAlertThreshold(Number(e.target.value))}
-            className="w-full h-2 rounded-full appearance-none cursor-pointer"
-            style={{ accentColor: '#F97316' }}
+        {/* ── Budget + Alert 2-col ─────────────────────── */}
+        <div className="text-xs font-bold mb-2 px-1" style={{ color: 'var(--sub)' }}>SPENDING CONTROLS</div>
+        <div className="grid grid-cols-2 gap-3 mb-5">
+          <BudgetStatCard
+            icon="🎯" iconBg="#FFF0E6"
+            label="Monthly Budget"
+            value={monthlyBudget}
+            sub="Overall cap"
+            color="#F97316"
+            onSave={v => { setMonthlyBudget(v); saveProfile({ monthly_budget: v }) }}
           />
-          <div className="flex justify-between text-[10px] mt-1" style={{ color: 'var(--sub)' }}>
-            <span>50%</span><span>95%</span>
+          {/* Alert threshold as a card */}
+          <div className="neu-card p-4 relative">
+            <div className="icon-box mb-3" style={{ fontSize: '1.3rem', background: '#FFF0E6' }}>🔔</div>
+            <div className="text-xs font-medium mb-1" style={{ color: 'var(--sub)' }}>Alert At</div>
+            <div className="text-2xl font-bold" style={{ color: '#F97316' }}>{alertThreshold}%</div>
+            <div className="text-[11px] mt-1 mb-3" style={{ color: 'var(--sub)' }}>of budget used</div>
+            <input
+              type="range" min={50} max={95} step={5}
+              value={alertThreshold}
+              onChange={e => setAlertThreshold(Number(e.target.value))}
+              onMouseUp={e => saveProfile({ alert_threshold: Number(e.target.value) })}
+              onTouchEnd={e => saveProfile({ alert_threshold: Number(e.target.value) })}
+              className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
+              style={{ accentColor: '#F97316' }}
+            />
           </div>
         </div>
 
-        {/* ── Savings Goal ─────────────────────────────────── */}
-        <div className="neu-card p-4 mb-4">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="icon-box text-xl icon-box-orange">🏆</div>
-            <div>
-              <div className="text-sm font-bold" style={{ color: 'var(--text)' }}>Savings Goal</div>
-              <div className="text-xs" style={{ color: 'var(--sub)' }}>What are you saving towards?</div>
-            </div>
-          </div>
-          <input
-            className="neu-input mb-3"
-            placeholder="e.g. Vacation fund, New laptop..."
-            value={goalName}
-            onChange={e => setGoalName(e.target.value)}
-          />
-          <RupeeInput
+        {/* ── Savings Goal ─────────────────────────────── */}
+        <div className="text-xs font-bold mb-2 px-1" style={{ color: 'var(--sub)' }}>SAVINGS GOAL</div>
+        <div className="grid grid-cols-2 gap-3 mb-5">
+          <BudgetStatCard
+            icon="🏆" iconBg="#FFF8DC"
+            label="Target Amount"
             value={goalAmount}
-            onChange={setGoalAmount}
-            placeholder="Target amount"
-            label="Target amount"
+            sub={goalName || 'Set a goal name'}
+            color="#F59E0B"
+            onSave={v => { setGoalAmount(v); saveProfile({ savings_target_amount: v }) }}
           />
-          <div className="mt-3">
-            <label className="text-xs font-semibold block mb-1.5" style={{ color: 'var(--sub)' }}>Target Date</label>
+          <div className="neu-card p-4">
+            <div className="icon-box mb-3" style={{ fontSize: '1.3rem', background: '#FFF8DC' }}>📅</div>
+            <div className="text-xs font-medium mb-2" style={{ color: 'var(--sub)' }}>Goal Name</div>
+            <input
+              className="w-full text-sm font-semibold outline-none rounded-lg px-2 py-1.5 mb-2"
+              style={{ background: 'var(--card)', color: 'var(--text)', border: '1.5px solid var(--shadow-dark)' }}
+              placeholder="e.g. Vacation..."
+              value={goalName}
+              onChange={e => setGoalName(e.target.value)}
+              onBlur={() => saveProfile({ savings_goal_name: goalName })}
+            />
             <input
               type="date"
-              className="neu-input"
+              className="w-full text-xs outline-none rounded-lg px-2 py-1.5"
+              style={{ background: 'var(--card)', color: 'var(--sub)', border: '1.5px solid var(--shadow-dark)' }}
               value={goalDate}
               onChange={e => setGoalDate(e.target.value)}
+              onBlur={() => saveProfile({ savings_target_date: goalDate || null })}
               min={new Date().toISOString().split('T')[0]}
             />
           </div>
         </div>
 
-        {/* ── Category Limits ──────────────────────────────── */}
-        <div className="section-title mb-3">Category Limits</div>
-        <div className="flex flex-col gap-4 mb-6">
+        {/* ── Category Limits 2x4 grid ─────────────────── */}
+        <div className="text-xs font-bold mb-2 px-1" style={{ color: 'var(--sub)' }}>CATEGORY LIMITS</div>
+        <div className="grid grid-cols-2 gap-3 mb-8">
           {CATEGORIES.map(cat => (
-            <CategoryLimitRow
+            <CategoryCard
               key={cat.name}
               cat={cat}
               spent={spentByCat[cat.name] || 0}
               limit={categoryLimits[cat.name] || 0}
-              onSetLimit={val => setCategoryLimits(prev => ({ ...prev, [cat.name]: val }))}
+              onSave={v => saveCatLimit(cat.name, v)}
             />
           ))}
         </div>
-
-        {/* Save */}
-        <button
-          className="btn-primary w-full py-4 text-base mb-6"
-          onClick={handleSave}
-          disabled={saving}
-        >
-          {saving ? '⏳ Saving...' : '💾 Save Budget & Wallets'}
-        </button>
       </div>
 
       <BottomNav onAddClick={() => setShowAdd(true)} />
