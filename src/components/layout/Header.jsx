@@ -17,14 +17,16 @@ export default function Header() {
       <div className="flex items-center justify-between pt-5 pb-2">
         <div>
           <style>
-            {`@import url('https://fonts.googleapis.com/css2?family=Rye&display=swap');`}
+            {`@import url('https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap');`}
           </style>
-          <h1 className="text-2xl tracking-wide" style={{ 
-            fontFamily: "'Rye', cursive", 
+          <h1 className="tracking-wide" style={{ 
+            fontFamily: "'Great Vibes', cursive", 
+            fontSize: '32px',
+            lineHeight: '1.2',
             color: '#F97316',
             textShadow: '1px 1px 2px rgba(0,0,0,0.15)'
           }}>
-            FinanceTracker
+            Finance Tracker
           </h1>
         </div>
         <div className="flex items-center gap-2">
