@@ -108,7 +108,7 @@ ALTER TABLE public.categories DROP CONSTRAINT IF EXISTS categories_name_key;
 ALTER TABLE public.categories ADD CONSTRAINT categories_name_key UNIQUE (name);
 
 INSERT INTO public.categories (name, icon, default_type, color, sort_order) VALUES
-  ('Food',          '🍕', 'unnecessary', '#F97316', 1),
+  ('Food',          '🍕', 'necessary', '#F97316', 1),
   ('Transport',     '🚗', 'necessary',   '#3B82F6', 2),
   ('Shopping',      '🛍️', 'unnecessary', '#A855F7', 3),
   ('Rent',          '🏠', 'necessary',   '#22C55E', 4),
@@ -201,3 +201,39 @@ DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- ============================================================
+-- TABLE: savings_goals
+-- ============================================================
+CREATE TABLE IF NOT EXISTS public.savings_goals (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  target_amount NUMERIC(12,2) NOT NULL CHECK (target_amount > 0),
+  current_amount NUMERIC(12,2) DEFAULT 0,
+  target_date DATE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.savings_goals ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can view own savings goals" ON public.savings_goals;
+DROP POLICY IF EXISTS "Users can insert own savings goals" ON public.savings_goals;
+DROP POLICY IF EXISTS "Users can update own savings goals" ON public.savings_goals;
+DROP POLICY IF EXISTS "Users can delete own savings goals" ON public.savings_goals;
+
+CREATE POLICY "Users can view own savings goals" ON public.savings_goals FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own savings goals" ON public.savings_goals FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own savings goals" ON public.savings_goals FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete own savings goals" ON public.savings_goals FOR DELETE USING (auth.uid() = user_id);
+
+-- Safely migrate existing single global goals to the new table
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.savings_goals) THEN
+    INSERT INTO public.savings_goals (user_id, name, target_amount, current_amount, target_date)
+    SELECT id, savings_goal_name, savings_target_amount, savings_current_amount, savings_target_date
+    FROM public.user_profiles
+    WHERE savings_goal_name IS NOT NULL AND savings_target_amount > 0;
+  END IF;
+END $$;

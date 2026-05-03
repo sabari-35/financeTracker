@@ -16,6 +16,7 @@ export const useFinanceStore = create((set, get) => ({
   transactions: [],
   categories: [],
   budgets: [],
+  savingsGoals: [],
   loading: false,
 
   // ── Selectors ──────────────────────────────────────────────
@@ -61,10 +62,11 @@ export const useFinanceStore = create((set, get) => ({
   // ── Loaders ──────────────────────────────────────────────
   fetchAll: async (userId) => {
     set({ loading: true })
-    const [txRes, catRes, budRes] = await Promise.all([
+    const [txRes, catRes, budRes, goalsRes] = await Promise.all([
       supabase.from('transactions').select('*, categories(*)').eq('user_id', userId).order('date', { ascending: false }),
       supabase.from('categories').select('*').order('sort_order'),
       supabase.from('budgets').select('*, categories(*)').eq('user_id', userId),
+      supabase.from('savings_goals').select('*').eq('user_id', userId).order('created_at', { ascending: true }),
     ])
     // Deduplicate categories by name (safeguard if INSERT ran multiple times)
     const rawCats = catRes.data || []
@@ -76,6 +78,7 @@ export const useFinanceStore = create((set, get) => ({
       transactions: txRes.data || [],
       categories: uniqueCats,
       budgets: budRes.data || [],
+      savingsGoals: goalsRes.data || [],
       loading: false,
     })
   },
@@ -115,5 +118,24 @@ export const useFinanceStore = create((set, get) => ({
           : [...state.budgets, data],
       }
     })
+  },
+
+  addSavingsGoal: async (goal) => {
+    const { data, error } = await supabase.from('savings_goals').insert(goal).select().single()
+    if (error) throw error
+    set(state => ({ savingsGoals: [...state.savingsGoals, data] }))
+    return data
+  },
+
+  updateSavingsGoal: async (id, updates) => {
+    const { data, error } = await supabase.from('savings_goals').update(updates).eq('id', id).select().single()
+    if (error) throw error
+    set(state => ({ savingsGoals: state.savingsGoals.map(g => g.id === id ? data : g) }))
+  },
+
+  deleteSavingsGoal: async (id) => {
+    const { error } = await supabase.from('savings_goals').delete().eq('id', id)
+    if (error) throw error
+    set(state => ({ savingsGoals: state.savingsGoals.filter(g => g.id !== id) }))
   },
 }))

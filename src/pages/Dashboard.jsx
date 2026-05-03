@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowUpRight, ArrowDownRight, ChevronRight } from 'lucide-react'
+import { ArrowUpRight, ArrowDownRight, ChevronRight, Wallet, IndianRupee, ShieldCheck, Flame, Banknote, Smartphone, CreditCard } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
 import { useFinanceStore } from '../store/financeStore'
 import Header from '../components/layout/Header'
@@ -64,28 +64,28 @@ export default function Dashboard() {
         ) : (
           <div className="grid grid-cols-2 gap-4 mb-4">
             <StatCard
-              icon="💰"
+              icon={<Wallet size={26} strokeWidth={2} color={balance >= 0 ? '#3B82F6' : '#EF4444'} />}
               label="Total Balance"
               value={`${balance >= 0 ? '' : '-'}${fmt(balance)}`}
               sub="This month"
-              color={balance >= 0 ? '#000000ff' : '#EF4444'}
+              color={balance >= 0 ? '#3B82F6' : '#EF4444'}
             />
             <StatCard
-              icon="₹"
+              icon={<IndianRupee size={26} strokeWidth={2.5} color="#F97316" />}
               label="Total Spent"
               value={fmt(stats.totalSpent)}
               sub={`${monthTxs.length} transactions`}
               color="#F97316"
             />
             <StatCard
-              icon="✅"
+              icon={<ShieldCheck size={26} strokeWidth={2.5} color="#22C55E" />}
               label="Necessary"
               value={fmt(stats.necessary)}
               sub="Essential spend"
               color="#22C55E"
             />
             <StatCard
-              icon="⚠️"
+              icon={<Flame size={26} strokeWidth={2.5} color="#EF4444" />}
               label="Unnecessary"
               value={fmt(stats.unnecessary)}
               sub="Could be reduced"
@@ -101,12 +101,12 @@ export default function Dashboard() {
             <div className="text-xs font-bold mb-3" style={{ color: 'var(--sub)' }}>WALLET BALANCES</div>
             <div className="grid grid-cols-3 gap-2">
               {[
-                { label: 'Cash',  icon: '💵', left: cashLeft,  spent: spentByMethod.cash, color: '#22C55E' },
-                { label: 'UPI',   icon: '📲', left: upiLeft,   spent: spentByMethod.upi,  color: '#3B82F6' },
-                { label: 'Card',  icon: '💳', left: cardLeft,  spent: spentByMethod.card, color: '#A855F7' },
+                { label: 'Cash',  icon: <Banknote size={32} strokeWidth={1.5} color="#15803d" fill="#86efac" style={{ filter: 'drop-shadow(0px 4px 8px rgba(34,197,94,0.4))' }} />, left: cashLeft,  spent: spentByMethod.cash, color: '#22C55E' },
+                { label: 'UPI',   icon: <Smartphone size={32} strokeWidth={1.5} color="#1d4ed8" fill="#93c5fd" style={{ filter: 'drop-shadow(0px 4px 8px rgba(59,130,246,0.4))' }} />, left: upiLeft,   spent: spentByMethod.upi,  color: '#3B82F6' },
+                { label: 'Card',  icon: <CreditCard size={32} strokeWidth={1.5} color="#7e22ce" fill="#d8b4fe" style={{ filter: 'drop-shadow(0px 4px 8px rgba(168,85,247,0.4))' }} />, left: cardLeft,  spent: spentByMethod.card, color: '#A855F7' },
               ].map(w => (
-                <div key={w.label} className="neu-card-sm p-2 text-center">
-                  <div className="text-lg mb-0.5">{w.icon}</div>
+                <div key={w.label} className="neu-card-sm p-2 text-center flex flex-col items-center">
+                  <div className="mb-1.5">{w.icon}</div>
                   <div className="text-[10px] font-medium mb-0.5" style={{ color: 'var(--sub)' }}>{w.label}</div>
                   <div className="text-sm font-bold" style={{ color: w.left >= 0 ? w.color : '#EF4444' }}>
                     {w.left >= 0 ? '' : '-'}{fmt(w.left)}

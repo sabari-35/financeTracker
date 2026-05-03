@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import { Download, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Download, ChevronLeft, ChevronRight, IndianRupee, Landmark, ShieldCheck, Flame, Banknote, Smartphone, CreditCard } from 'lucide-react'
 import toast from 'react-hot-toast'
 import jsPDF from 'jspdf'
 import html2canvas from 'html2canvas'
@@ -118,15 +118,15 @@ export default function Reports() {
           {/* Summary cards */}
           <div className="grid grid-cols-2 gap-3 mb-4">
             {[
-              { label: 'Total Spent', val: stats.totalSpent, color: '#F97316', icon: '💸' },
-              { label: 'Savings', val: savings, color: savings >= 0 ? '#22C55E' : '#EF4444', icon: '🏦' },
-              { label: 'Necessary', val: stats.necessary, color: '#22C55E', icon: '✅' },
-              { label: 'Unnecessary', val: stats.unnecessary, color: '#EF4444', icon: '⚠️' },
+              { label: 'Total Spent', val: stats.totalSpent, color: '#F97316', icon: <IndianRupee size={26} strokeWidth={2.5} color="#F97316" /> },
+              { label: 'Savings', val: savings, color: savings >= 0 ? '#22C55E' : '#EF4444', icon: <Landmark size={26} strokeWidth={2} color={savings >= 0 ? '#22C55E' : '#EF4444'} /> },
+              { label: 'Necessary', val: stats.necessary, color: '#22C55E', icon: <ShieldCheck size={26} strokeWidth={2.5} color="#22C55E" /> },
+              { label: 'Unnecessary', val: stats.unnecessary, color: '#EF4444', icon: <Flame size={26} strokeWidth={2.5} color="#EF4444" /> },
             ].map(s => (
               <div key={s.label} className="neu-card p-4">
-                <div className="text-xl mb-1">{s.icon}</div>
-                <div className="text-xs mb-0.5" style={{ color: 'var(--sub)' }}>{s.label}</div>
-                <div className="text-xl font-bold" style={{ color: s.color }}>
+                <div className="icon-box mb-3" style={{ background: 'var(--card)' }}>{s.icon}</div>
+                <div className="text-xs font-medium mb-1" style={{ color: 'var(--sub)' }}>{s.label}</div>
+                <div className="text-2xl font-bold" style={{ color: s.color }}>
                   ₹{Math.abs(s.val).toLocaleString('en-IN')}
                 </div>
               </div>
@@ -201,20 +201,20 @@ export default function Reports() {
                 
                 {monthTxs.length > 0 && (
                   <div className="flex items-center justify-between border-t pt-3" style={{ borderColor: 'var(--shadow-dark)' }}>
-                    <div className="flex-1 text-center">
-                      <div className="text-lg mb-0.5">💵</div>
+                    <div className="flex-1 text-center flex flex-col items-center">
+                      <div className="mb-1.5"><Banknote size={32} strokeWidth={1.5} color="#15803d" fill="#86efac" style={{ filter: 'drop-shadow(0px 4px 8px rgba(34,197,94,0.4))' }} /></div>
                       <div className="text-[10px] font-medium mb-0.5" style={{ color: 'var(--sub)' }}>Cash</div>
                       <div className="text-sm font-bold" style={{ color: '#22C55E' }}>{counts.cash}</div>
                     </div>
                     <div className="w-px h-10 bg-[var(--shadow-dark)] opacity-50" />
-                    <div className="flex-1 text-center">
-                      <div className="text-lg mb-0.5">📲</div>
+                    <div className="flex-1 text-center flex flex-col items-center">
+                      <div className="mb-1.5"><Smartphone size={32} strokeWidth={1.5} color="#1d4ed8" fill="#93c5fd" style={{ filter: 'drop-shadow(0px 4px 8px rgba(59,130,246,0.4))' }} /></div>
                       <div className="text-[10px] font-medium mb-0.5" style={{ color: 'var(--sub)' }}>UPI</div>
                       <div className="text-sm font-bold" style={{ color: '#3B82F6' }}>{counts.upi}</div>
                     </div>
                     <div className="w-px h-10 bg-[var(--shadow-dark)] opacity-50" />
-                    <div className="flex-1 text-center">
-                      <div className="text-lg mb-0.5">💳</div>
+                    <div className="flex-1 text-center flex flex-col items-center">
+                      <div className="mb-1.5"><CreditCard size={32} strokeWidth={1.5} color="#7e22ce" fill="#d8b4fe" style={{ filter: 'drop-shadow(0px 4px 8px rgba(168,85,247,0.4))' }} /></div>
                       <div className="text-[10px] font-medium mb-0.5" style={{ color: 'var(--sub)' }}>Card</div>
                       <div className="text-sm font-bold" style={{ color: '#A855F7' }}>{counts.card}</div>
                     </div>

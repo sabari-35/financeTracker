@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Pencil } from 'lucide-react'
+import { Pencil, Trash2, PlusCircle, Banknote, Smartphone, CreditCard } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '../store/authStore'
 import { useFinanceStore } from '../store/financeStore'
@@ -20,9 +20,9 @@ const CATEGORIES = [
 ]
 
 const WALLETS = [
-  { key: 'cash_balance', label: 'Cash', icon: '💵', color: '#22C55E', payKey: 'cash' },
-  { key: 'upi_balance',  label: 'UPI',  icon: '📲', color: '#3B82F6', payKey: 'upi'  },
-  { key: 'card_balance', label: 'Card', icon: '💳', color: '#A855F7', payKey: 'card' },
+  { key: 'cash_balance', label: 'Cash', icon: <Banknote size={24} strokeWidth={1.5} color="#15803d" fill="#86efac" style={{ filter: 'drop-shadow(0px 3px 5px rgba(34,197,94,0.4))' }} />, color: '#22C55E', payKey: 'cash' },
+  { key: 'upi_balance',  label: 'UPI',  icon: <Smartphone size={24} strokeWidth={1.5} color="#1d4ed8" fill="#93c5fd" style={{ filter: 'drop-shadow(0px 3px 5px rgba(59,130,246,0.4))' }} />, color: '#3B82F6', payKey: 'upi'  },
+  { key: 'card_balance', label: 'Card', icon: <CreditCard size={24} strokeWidth={1.5} color="#7e22ce" fill="#d8b4fe" style={{ filter: 'drop-shadow(0px 3px 5px rgba(168,85,247,0.4))' }} />, color: '#A855F7', payKey: 'card' },
 ]
 
 /* ── Small pencil edit button pinned top-right of a card ───── */
@@ -137,7 +137,7 @@ function CategoryCard({ cat, spent, limit, onEdit }) {
 /* ── Main page ──────────────────────────────────────────────── */
 export default function Budget() {
   const { user, profile, updateProfile } = useAuthStore()
-  const { fetchAll, categories, budgets, upsertBudget, transactions } = useFinanceStore()
+  const { fetchAll, categories, budgets, upsertBudget, transactions, savingsGoals, addSavingsGoal, updateSavingsGoal, deleteSavingsGoal } = useFinanceStore()
   const [showAdd, setShowAdd] = useState(false)
 
   /* Budget state */
@@ -146,9 +146,8 @@ export default function Budget() {
   const [cashBalance,    setCashBalance]    = useState(0)
   const [upiBalance,     setUpiBalance]     = useState(0)
   const [cardBalance,    setCardBalance]    = useState(0)
-  const [goalName,       setGoalName]       = useState('')
-  const [goalAmount,     setGoalAmount]     = useState(0)
-  const [goalDate,       setGoalDate]       = useState('')
+  const [showAddGoal,    setShowAddGoal]    = useState(false)
+  const [newGoal,        setNewGoal]        = useState({ name: '', target_amount: '' })
   const [categoryLimits, setCategoryLimits] = useState({})
 
   /* Bottom sheet state — one shared sheet, configured per-field */
@@ -187,9 +186,6 @@ export default function Budget() {
     setCashBalance(profile.cash_balance  || 0)
     setUpiBalance(profile.upi_balance    || 0)
     setCardBalance(profile.card_balance   || 0)
-    setGoalName(profile.savings_goal_name        || '')
-    setGoalAmount(profile.savings_target_amount  || 0)
-    setGoalDate(profile.savings_target_date      || '')
   }, [profile])
   useEffect(() => {
     const limits = {}
@@ -291,45 +287,127 @@ export default function Budget() {
           </div>
         </div>
 
-        {/* ── Savings Goal 2-col ────────────────────────── */}
-        <div className="text-xs font-bold mb-2 px-1" style={{ color: 'var(--sub)' }}>SAVINGS GOAL</div>
-        <div className="grid grid-cols-2 gap-3 mb-5">
-          <StatCard
-            icon="🏆" iconBg="#FFF8DC"
-            label="Target Amount"
-            value={goalAmount}
-            sub={goalName || 'Set a goal name below'}
-            color="#F59E0B"
-            onEdit={() => openSheet({
-              title:   'Edit Savings Target',
-              label:   'Target Amount (₹)',
-              current: goalAmount,
-              hint:    goalName ? `Goal: ${goalName}` : 'Enter your savings goal amount.',
-              onConfirm: v => { setGoalAmount(v); saveProfile({ savings_target_amount: v }) },
-            })}
-          />
-          <div className="neu-card p-4">
-            <div className="icon-box mb-3" style={{ fontSize: '1.3rem', background: '#FFF8DC' }}>📅</div>
-            <div className="text-xs font-medium mb-2" style={{ color: 'var(--sub)' }}>Goal Details</div>
+        {/* ── Savings Goals ─────────────────────────────── */}
+        <div className="text-xs font-bold mb-2 px-1" style={{ color: 'var(--sub)' }}>SAVINGS GOALS</div>
+        
+        {savingsGoals?.map(goal => {
+          const pct = goal.target_amount > 0 ? Math.min(100, (goal.current_amount / goal.target_amount) * 100) : 0
+          return (
+            <div key={goal.id} className="neu-card p-4 mb-4 relative">
+              <div className="absolute top-3 right-3 flex gap-2">
+                <button
+                  onClick={() => openSheet({
+                    title: 'Edit Target Amount',
+                    label: 'Target Amount (₹)',
+                    current: goal.target_amount,
+                    hint: `Goal: ${goal.name}`,
+                    onConfirm: async (v) => {
+                      try { await updateSavingsGoal(goal.id, { target_amount: v }); toast.success('Updated'); }
+                      catch (e) { toast.error(e.message); }
+                    }
+                  })}
+                  className="w-7 h-7 rounded-lg flex items-center justify-center neu-btn" style={{ color: '#3B82F6' }}
+                >
+                  <Pencil size={12} />
+                </button>
+                <button
+                  onClick={async () => {
+                    if (window.confirm(`Delete goal "${goal.name}"?`)) {
+                      try { await deleteSavingsGoal(goal.id); toast.success('Deleted'); }
+                      catch (e) { toast.error(e.message); }
+                    }
+                  }}
+                  className="w-7 h-7 rounded-lg flex items-center justify-center neu-btn" style={{ color: '#EF4444' }}
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
+
+              <div className="flex items-center gap-3 mb-3">
+                <div className="icon-box" style={{ fontSize: '1.2rem', background: '#FFF8DC' }}>🏆</div>
+                <div>
+                  <div className="text-sm font-bold" style={{ color: 'var(--text)' }}>{goal.name}</div>
+                  {goal.target_date && <div className="text-[10px]" style={{ color: 'var(--sub)' }}>By {new Date(goal.target_date).toLocaleDateString()}</div>}
+                </div>
+              </div>
+
+              <div className="flex justify-between items-end mb-2">
+                <div className="text-sm font-bold" style={{ color: '#F97316' }}>
+                  ₹{Number(goal.current_amount).toLocaleString('en-IN')} <span className="text-xs" style={{ color: 'var(--sub)' }}>/ ₹{Number(goal.target_amount).toLocaleString('en-IN')}</span>
+                </div>
+                <div className="text-xs font-bold" style={{ color: '#22C55E' }}>{pct.toFixed(0)}%</div>
+              </div>
+
+              <div className="neu-inset p-0.5 rounded-full mb-4">
+                <div className="h-2 rounded-full transition-all duration-700"
+                  style={{ width: `${pct}%`, background: '#F59E0B', minWidth: pct > 0 ? 8 : 0 }} />
+              </div>
+
+              <button
+                onClick={() => openSheet({
+                  title: `Deposit to ${goal.name}`,
+                  label: 'Amount to Deposit (₹)',
+                  current: 0,
+                  hint: `Remaining: ₹${Math.max(0, goal.target_amount - goal.current_amount).toLocaleString('en-IN')}`,
+                  onConfirm: async (v) => {
+                    try {
+                      const newAmt = Number(goal.current_amount) + Number(v);
+                      await updateSavingsGoal(goal.id, { current_amount: newAmt });
+                      toast.success(`Deposited ₹${v}`);
+                    } catch (e) { toast.error(e.message); }
+                  }
+                })}
+                className="btn-primary w-full py-2.5 flex items-center justify-center gap-2 rounded-xl text-sm font-bold"
+              >
+                Deposit Savings
+              </button>
+            </div>
+          )
+        })}
+
+        {showAddGoal ? (
+          <div className="neu-card p-4 mb-5">
+            <div className="text-sm font-bold mb-3" style={{ color: 'var(--text)' }}>Create New Goal</div>
             <input
-              className="w-full text-sm font-semibold outline-none rounded-lg px-2 py-1.5 mb-2"
+              className="w-full text-sm outline-none rounded-lg px-3 py-2 mb-3"
               style={{ background: 'var(--card)', color: 'var(--text)', border: '1.5px solid var(--shadow-dark)' }}
-              placeholder="Goal name..."
-              value={goalName}
-              onChange={e => setGoalName(e.target.value)}
-              onBlur={() => saveProfile({ savings_goal_name: goalName })}
+              placeholder="Goal Name (e.g. Car)"
+              value={newGoal.name}
+              onChange={e => setNewGoal({ ...newGoal, name: e.target.value })}
+            />
+            <input
+              type="number"
+              className="w-full text-sm outline-none rounded-lg px-3 py-2 mb-3"
+              style={{ background: 'var(--card)', color: 'var(--text)', border: '1.5px solid var(--shadow-dark)' }}
+              placeholder="Target Amount (₹)"
+              value={newGoal.target_amount || ''}
+              onChange={e => setNewGoal({ ...newGoal, target_amount: Number(e.target.value) })}
             />
             <input
               type="date"
-              className="w-full text-xs outline-none rounded-lg px-2 py-1.5"
+              className="w-full text-sm outline-none rounded-lg px-3 py-2 mb-4"
               style={{ background: 'var(--card)', color: 'var(--sub)', border: '1.5px solid var(--shadow-dark)' }}
-              value={goalDate}
-              onChange={e => setGoalDate(e.target.value)}
-              onBlur={() => saveProfile({ savings_target_date: goalDate || null })}
-              min={new Date().toISOString().split('T')[0]}
+              value={newGoal.target_date || ''}
+              onChange={e => setNewGoal({ ...newGoal, target_date: e.target.value })}
             />
+            <div className="flex gap-3">
+              <button className="flex-1 py-2.5 text-sm font-bold text-gray-500 bg-gray-100 rounded-xl" onClick={() => setShowAddGoal(false)}>Cancel</button>
+              <button className="flex-1 py-2.5 text-sm font-bold btn-primary rounded-xl" onClick={async () => {
+                if (!newGoal.name || !newGoal.target_amount) return toast.error('Name and Amount required');
+                try {
+                  await addSavingsGoal({ user_id: user.id, ...newGoal });
+                  setNewGoal({ name: '', target_amount: '' });
+                  setShowAddGoal(false);
+                  toast.success('Goal created');
+                } catch(e) { toast.error(e.message) }
+              }}>Save Goal</button>
+            </div>
           </div>
-        </div>
+        ) : (
+          <button onClick={() => setShowAddGoal(true)} className="w-full py-3 mb-5 neu-btn rounded-xl text-sm font-bold flex items-center justify-center gap-2" style={{ color: '#F97316' }}>
+            <PlusCircle size={16} /> Add New Savings Goal
+          </button>
+        )}
 
         {/* ── Category Limits 2-col grid ────────────────── */}
         <div className="text-xs font-bold mb-2 px-1" style={{ color: 'var(--sub)' }}>CATEGORY LIMITS</div>

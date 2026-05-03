@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { LayoutDashboard, PlusCircle, Target, Lightbulb, BarChart3 } from 'lucide-react'
+import { LayoutDashboard, PlusCircle, Target, Lightbulb, BarChart3, User } from 'lucide-react'
 
 const TABS = [
   { path: '/', icon: LayoutDashboard, label: 'Dash' },
@@ -24,10 +24,10 @@ export default function BottomNav({ onAddClick }) {
               <button
                 key="add"
                 onClick={onAddClick}
-                className="relative -top-5 w-14 h-14 rounded-full btn-primary shadow-orange-glow flex items-center justify-center"
+                className="relative -top-5 w-14 h-14 rounded-full btn-primary shadow-orange-glow flex items-center justify-center overflow-hidden text-white"
                 style={{ minHeight: 'unset' }}
               >
-                <tab.icon size={28} strokeWidth={2.5} />
+                <User size={28} strokeWidth={2.5} />
               </button>
             )
           }
