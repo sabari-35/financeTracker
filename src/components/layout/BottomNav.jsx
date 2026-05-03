@@ -4,8 +4,9 @@ import { LayoutDashboard, PlusCircle, Target, Lightbulb, BarChart3 } from 'lucid
 
 const TABS = [
   { path: '/', icon: LayoutDashboard, label: 'Dash' },
-  { path: null, icon: PlusCircle, label: 'Add', isFab: true },
+  
   { path: '/budget', icon: Target, label: 'Budget' },
+  { path: null, icon: PlusCircle, label: 'Add', isFab: true },
   { path: '/insights', icon: Lightbulb, label: 'Insights' },
   { path: '/reports', icon: BarChart3, label: 'Reports' },
 ]
