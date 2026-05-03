@@ -147,13 +147,13 @@ export default function Reports() {
             <div className="neu-card p-4 mb-4">
               <div className="text-sm font-bold mb-3" style={{ color: 'var(--text)' }}>Spend by Category</div>
               <ResponsiveContainer width="100%" height={220}>
-                <PieChart>
+                <PieChart margin={{ top: 0, right: 25, bottom: 0, left: 25 }} style={{ fontSize: '11px' }}>
                   <Pie
                     data={pieData}
                     cx="50%"
                     cy="50%"
-                    outerRadius={80}
-                    innerRadius={40}
+                    outerRadius={55}
+                    innerRadius={25}
                     dataKey="value"
                     label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                     labelLine={false}
