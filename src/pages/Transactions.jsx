@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Search, Trash2, Edit3, Filter, X, Check } from 'lucide-react'
+import { Search, Trash2, Edit3, Filter, X, Check, Calendar, Clock, CalendarDays, CalendarRange, Settings2, ChevronDown } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '../store/authStore'
 import { useFinanceStore } from '../store/financeStore'
@@ -16,10 +16,22 @@ export default function Transactions() {
   const [showAdd, setShowAdd] = useState(false)
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('All')
+  const [dateFilter, setDateFilter] = useState('All Time')
+  const [showDateDropdown, setShowDateDropdown] = useState(false)
+  const [customStart, setCustomStart] = useState('')
+  const [customEnd, setCustomEnd] = useState('')
   const [sheet, setSheet] = useState(null)
   const [deleteConfirm, setDeleteConfirm] = useState(null)
   const [longPressed, setLongPressed] = useState(null)
   let pressTimer = null
+
+  const DATE_FILTERS = [
+    { id: 'All Time', label: 'All Time', icon: Calendar },
+    { id: 'Today', label: 'Today', icon: Clock },
+    { id: 'Last 7 Days', label: 'Last 7 Days', icon: CalendarDays },
+    { id: 'Last 30 Days', label: 'Last 30 Days', icon: CalendarRange },
+    { id: 'Custom', label: 'Custom Days', icon: Settings2 },
+  ]
 
   const openSheet = (config) => setSheet(config)
   const closeSheet = () => setSheet(null)
@@ -27,6 +39,13 @@ export default function Transactions() {
   useEffect(() => {
     if (user?.id) fetchAll(user.id)
   }, [user?.id])
+
+  // Helper to normalize dates for comparison (ignoring time)
+  const normalizeDate = (d) => {
+    const date = new Date(d)
+    date.setHours(0, 0, 0, 0)
+    return date
+  }
 
   const filtered = transactions.filter(t => {
     const matchSearch = !search || 
@@ -39,8 +58,36 @@ export default function Transactions() {
       filter === 'Unnecessary' ? t.type === 'unnecessary' :
       (t.categories?.name || 'Other') === filter
 
-    return matchSearch && matchFilter
-  })
+    let matchDate = true
+    const txDate = normalizeDate(t.date)
+    const today = normalizeDate(new Date())
+
+    if (dateFilter === 'Today') {
+      matchDate = txDate.getTime() === today.getTime()
+    } else if (dateFilter === 'Last 7 Days') {
+      const sevenDaysAgo = new Date(today)
+      sevenDaysAgo.setDate(today.getDate() - 7)
+      matchDate = txDate >= sevenDaysAgo && txDate <= today
+    } else if (dateFilter === 'Last 30 Days') {
+      const thirtyDaysAgo = new Date(today)
+      thirtyDaysAgo.setDate(today.getDate() - 30)
+      matchDate = txDate >= thirtyDaysAgo && txDate <= today
+    } else if (dateFilter === 'Custom') {
+      if (customStart && customEnd) {
+        const start = normalizeDate(customStart)
+        const end = normalizeDate(customEnd)
+        matchDate = txDate >= start && txDate <= end
+      } else if (customStart) {
+        const start = normalizeDate(customStart)
+        matchDate = txDate >= start
+      } else if (customEnd) {
+        const end = normalizeDate(customEnd)
+        matchDate = txDate <= end
+      }
+    }
+
+    return matchSearch && matchFilter && matchDate
+  }).sort((a, b) => new Date(b.date) - new Date(a.date))
 
   const handleLongPress = (id) => {
     setLongPressed(prev => prev === id ? null : id)
@@ -76,6 +123,64 @@ export default function Transactions() {
             <button className="absolute right-4 top-1/2 -translate-y-1/2" onClick={() => setSearch('')}>
               <X size={16} style={{ color: 'var(--sub)' }} />
             </button>
+          )}
+        </div>
+
+        {/* Date Filter */}
+        <div className="mb-4 relative z-20">
+          <button 
+            onClick={() => setShowDateDropdown(!showDateDropdown)}
+            className="neu-input w-full font-bold flex items-center justify-between"
+            style={{ color: 'var(--text)' }}
+          >
+            <div className="flex items-center gap-2">
+              {React.createElement(DATE_FILTERS.find(f => f.id === dateFilter)?.icon || Calendar, { size: 18, style: { color: '#F97316' } })}
+              {DATE_FILTERS.find(f => f.id === dateFilter)?.label}
+            </div>
+            <ChevronDown size={18} style={{ color: 'var(--sub)', transform: showDateDropdown ? 'rotate(180deg)' : 'none', transition: '0.2s' }} />
+          </button>
+
+          {showDateDropdown && (
+            <div className="absolute top-full left-0 right-0 mt-2 neu-card p-2 flex flex-col gap-1 animate-slide-up shadow-xl">
+              {DATE_FILTERS.map(f => (
+                <button
+                  key={f.id}
+                  onClick={() => { setDateFilter(f.id); setShowDateDropdown(false) }}
+                  className="flex items-center gap-3 p-3 rounded-lg text-sm font-semibold transition-colors text-left"
+                  style={{ 
+                    background: dateFilter === f.id ? '#FFF0E6' : 'transparent',
+                    color: dateFilter === f.id ? '#F97316' : 'var(--text)' 
+                  }}
+                >
+                  <f.icon size={18} style={{ color: dateFilter === f.id ? '#F97316' : 'var(--sub)' }} />
+                  {f.label}
+                  {dateFilter === f.id && <Check size={16} className="ml-auto" />}
+                </button>
+              ))}
+            </div>
+          )}
+          
+          {dateFilter === 'Custom' && (
+            <div className="flex gap-3 mt-3 animate-slide-up">
+              <div className="flex-1">
+                <label className="text-[10px] font-bold mb-1 block" style={{ color: 'var(--sub)' }}>Start Date</label>
+                <input 
+                  type="date" 
+                  className="neu-input w-full text-xs" 
+                  value={customStart}
+                  onChange={e => setCustomStart(e.target.value)}
+                />
+              </div>
+              <div className="flex-1">
+                <label className="text-[10px] font-bold mb-1 block" style={{ color: 'var(--sub)' }}>End Date</label>
+                <input 
+                  type="date" 
+                  className="neu-input w-full text-xs" 
+                  value={customEnd}
+                  onChange={e => setCustomEnd(e.target.value)}
+                />
+              </div>
+            </div>
           )}
         </div>
 
