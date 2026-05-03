@@ -4,7 +4,7 @@ import { RefreshCw, TrendingDown, AlertCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '../store/authStore'
 import { useFinanceStore } from '../store/financeStore'
-import { getAISuggestions } from '../lib/claudeApi'
+import { getAISuggestions } from '../lib/geminiApi'
 import Header from '../components/layout/Header'
 import BottomNav from '../components/layout/BottomNav'
 import QuickAddModal from '../components/QuickAdd/QuickAddModal'
@@ -102,7 +102,11 @@ export default function Insights() {
       const tips = await getAISuggestions(summary)
       setAiTips(tips)
     } catch (err) {
-      toast.error('AI insights unavailable')
+      if (err.message === 'QUOTA_EXCEEDED') {
+        toast.error('Gemini API Limit Exceeded. Please check your API key.')
+      } else {
+        toast.error('AI insights unavailable')
+      }
     } finally {
       setAiLoading(false)
     }
