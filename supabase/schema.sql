@@ -61,6 +61,52 @@ ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Anyone can view categories" ON public.categories;
 CREATE POLICY "Anyone can view categories" ON public.categories FOR SELECT USING (true);
 
+-- Step 1: Safely remove duplicate categories
+-- Strategy: keep the first-inserted row (survivor), discard the rest.
+-- Duplicate budgets referencing extras are DELETED (they're redundant).
+-- Transactions are remapped to the survivor.
+DO $$
+DECLARE
+  survivor UUID;
+  cat_name TEXT;
+BEGIN
+  FOR cat_name IN
+    SELECT name FROM public.categories GROUP BY name HAVING COUNT(*) > 1
+  LOOP
+    -- Identify the survivor (earliest inserted)
+    SELECT id INTO survivor
+    FROM public.categories
+    WHERE name = cat_name
+    ORDER BY ctid
+    LIMIT 1;
+
+    -- Delete duplicate budget rows pointing to non-survivor category IDs
+    -- (cannot remap — would violate unique constraint on user_id+category_id+month+year)
+    DELETE FROM public.budgets
+    WHERE category_id IN (
+      SELECT id FROM public.categories
+      WHERE name = cat_name AND id <> survivor
+    );
+
+    -- Remap transactions to the survivor (no unique constraint, safe to update)
+    UPDATE public.transactions
+    SET category_id = survivor
+    WHERE category_id IN (
+      SELECT id FROM public.categories
+      WHERE name = cat_name AND id <> survivor
+    );
+
+    -- Now safely delete the extra category rows
+    DELETE FROM public.categories
+    WHERE name = cat_name AND id <> survivor;
+  END LOOP;
+END;
+$$;
+
+-- Step 2: Add unique constraint now that duplicates are gone
+ALTER TABLE public.categories DROP CONSTRAINT IF EXISTS categories_name_key;
+ALTER TABLE public.categories ADD CONSTRAINT categories_name_key UNIQUE (name);
+
 INSERT INTO public.categories (name, icon, default_type, color, sort_order) VALUES
   ('Food',          '🍕', 'unnecessary', '#F97316', 1),
   ('Transport',     '🚗', 'necessary',   '#3B82F6', 2),

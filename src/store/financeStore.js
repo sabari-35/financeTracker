@@ -66,9 +66,15 @@ export const useFinanceStore = create((set, get) => ({
       supabase.from('categories').select('*').order('sort_order'),
       supabase.from('budgets').select('*, categories(*)').eq('user_id', userId),
     ])
+    // Deduplicate categories by name (safeguard if INSERT ran multiple times)
+    const rawCats = catRes.data || []
+    const uniqueCats = rawCats.length
+      ? [...new Map(rawCats.map(c => [c.name, c])).values()]
+      : CATEGORIES
+
     set({
       transactions: txRes.data || [],
-      categories: catRes.data?.length ? catRes.data : CATEGORIES,
+      categories: uniqueCats,
       budgets: budRes.data || [],
       loading: false,
     })
