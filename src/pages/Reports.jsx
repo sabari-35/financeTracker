@@ -105,7 +105,9 @@ export default function Reports() {
   }
 
   const budget = profile?.monthly_budget || 0
-  const savings = budget - stats.totalSpent
+  // Real savings = total wallet money minus what was spent this month
+  const totalWallet = (profile?.cash_balance || 0) + (profile?.upi_balance || 0) + (profile?.card_balance || 0)
+  const savings = totalWallet - stats.totalSpent
 
   return (
     <div className="page">
