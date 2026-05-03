@@ -78,7 +78,7 @@ export default function Login() {
           {mode === 'signup' && (
             <div>
               <label className="text-xs font-semibold mb-1.5 block" style={{ color: 'var(--sub)' }}>Your Name</label>
-              <input className="neu-input" placeholder="John Doe" value={name} onChange={e => setName(e.target.value)} />
+              <input className="neu-input" placeholder="Sabari" value={name} onChange={e => setName(e.target.value)} />
             </div>
           )}
           <div>
@@ -86,7 +86,7 @@ export default function Login() {
             <input
               className="neu-input"
               type="email"
-              placeholder="you@email.com"
+              placeholder="yourName@gmail.com"
               value={email}
               onChange={e => setEmail(e.target.value)}
               autoComplete="email"
