@@ -101,12 +101,6 @@ function CategoryCard({ cat, spent, limit, onEdit }) {
 
   return (
     <div className="neu-card p-4 relative">
-      {pct > 0 && (
-        <div className="absolute top-9 right-3 text-[10px] font-bold px-1.5 py-0.5 rounded-full"
-          style={{ background: `${color}22`, color }}>
-          {pct}%
-        </div>
-      )}
       <EditBtn onClick={onEdit} />
 
       <div className="icon-box mb-3" style={{ fontSize: '1.2rem', background: `${cat.color}18` }}>
@@ -116,9 +110,20 @@ function CategoryCard({ cat, spent, limit, onEdit }) {
       <div className="text-xl font-bold" style={{ color: limit > 0 ? 'var(--text)' : 'var(--sub)' }}>
         {limit > 0 ? `₹${Number(limit).toLocaleString('en-IN')}` : 'No limit'}
       </div>
-      <div className="text-[11px] mt-1" style={{ color: 'var(--sub)' }}>
-        Spent ₹{spent.toLocaleString('en-IN')}
+
+      {/* Spent + % badge on same row */}
+      <div className="flex items-center gap-1.5 mt-1">
+        <span className="text-[11px]" style={{ color: 'var(--sub)' }}>
+          Spent ₹{spent.toLocaleString('en-IN')}
+        </span>
+        {pct > 0 && (
+          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+            style={{ background: `${color}22`, color }}>
+            {pct}%
+          </span>
+        )}
       </div>
+
       {limit > 0 && (
         <div className="neu-inset p-0.5 rounded-full mt-3">
           <div className="h-1.5 rounded-full transition-all duration-700"
