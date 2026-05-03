@@ -68,7 +68,7 @@ export default function Dashboard() {
               label="Total Balance"
               value={`${balance >= 0 ? '' : '-'}${fmt(balance)}`}
               sub="This month"
-              color={balance >= 0 ? '#22C55E' : '#EF4444'}
+              color={balance >= 0 ? '#000000ff' : '#EF4444'}
             />
             <StatCard
               icon="₹"

@@ -6,6 +6,7 @@ import { useFinanceStore } from '../store/financeStore'
 import Header from '../components/layout/Header'
 import BottomNav from '../components/layout/BottomNav'
 import QuickAddModal from '../components/QuickAdd/QuickAddModal'
+import EditBottomSheet from '../components/ui/EditBottomSheet'
 
 const FILTERS = ['All', 'Necessary', 'Unnecessary', 'Food', 'Transport', 'Shopping', 'Rent', 'Health', 'Entertainment', 'Subscriptions', 'Other']
 
@@ -15,11 +16,13 @@ export default function Transactions() {
   const [showAdd, setShowAdd] = useState(false)
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('All')
-  const [editId, setEditId] = useState(null)
-  const [editNote, setEditNote] = useState('')
+  const [sheet, setSheet] = useState(null)
   const [deleteConfirm, setDeleteConfirm] = useState(null)
   const [longPressed, setLongPressed] = useState(null)
   let pressTimer = null
+
+  const openSheet = (config) => setSheet(config)
+  const closeSheet = () => setSheet(null)
 
   useEffect(() => {
     if (user?.id) fetchAll(user.id)
@@ -51,16 +54,6 @@ export default function Transactions() {
       setDeleteConfirm(null)
     } catch (err) {
       toast.error('Delete failed')
-    }
-  }
-
-  const handleEdit = async (id) => {
-    try {
-      await updateTransaction(id, { note: editNote })
-      toast.success('Updated!')
-      setEditId(null)
-    } catch (err) {
-      toast.error('Update failed')
     }
   }
 
@@ -129,29 +122,17 @@ export default function Transactions() {
                   <div className="flex items-center gap-3">
                     <div className="icon-box text-lg flex-shrink-0">{tx.categories?.icon || '📦'}</div>
                     <div className="flex-1 min-w-0">
-                      {editId === tx.id ? (
-                        <div className="flex gap-2">
-                          <input
-                            className="neu-input text-sm py-1.5 px-2"
-                            value={editNote}
-                            onChange={e => setEditNote(e.target.value)}
-                            autoFocus
-                          />
-                          <button onClick={() => handleEdit(tx.id)} className="neu-btn p-2">
-                            <Check size={14} className="text-green-500" />
-                          </button>
+                      <div className="text-sm font-semibold truncate" style={{ color: 'var(--text)' }}>
+                        {tx.categories?.name || 'Other'}
+                      </div>
+                      <div className="text-[11px] mt-0.5" style={{ color: 'var(--sub)' }}>
+                        {tx.payment_method?.toUpperCase()} •{' '}
+                        {new Date(tx.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' })}
+                      </div>
+                      {tx.note && (
+                        <div className="text-xs mt-1 italic" style={{ color: 'var(--sub)', opacity: 0.85 }}>
+                          {tx.note}
                         </div>
-                      ) : (
-                        <>
-                          <div className="text-sm font-semibold truncate" style={{ color: 'var(--text)' }}>
-                            {tx.categories?.name || 'Other'}
-                          </div>
-                          <div className="text-[11px]" style={{ color: 'var(--sub)' }}>
-                            {tx.note && `${tx.note} • `}
-                            {tx.payment_method?.toUpperCase()} •{' '}
-                            {new Date(tx.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' })}
-                          </div>
-                        </>
                       )}
                     </div>
                     <div className="text-right flex-shrink-0">
@@ -169,7 +150,25 @@ export default function Transactions() {
                 {longPressed === tx.id && (
                   <div className="flex gap-2 mt-2 px-1 animate-slide-up">
                     <button
-                      onClick={() => { setEditId(tx.id); setEditNote(tx.note || ''); setLongPressed(null) }}
+                      onClick={() => {
+                        setLongPressed(null)
+                        openSheet({
+                          title: 'Edit Note',
+                          label: 'Transaction Note',
+                          current: tx.note || '',
+                          hint: 'Add details about this transaction.',
+                          inputType: 'text',
+                          prefix: '',
+                          onConfirm: async (val) => {
+                            try {
+                              await updateTransaction(tx.id, { note: val })
+                              toast.success('Note updated!')
+                            } catch (err) {
+                              toast.error('Update failed')
+                            }
+                          }
+                        })
+                      }}
                       className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium"
                       style={{ background: '#DBEAFE', color: '#1D4ED8' }}
                     >
@@ -217,6 +216,18 @@ export default function Transactions() {
 
       <BottomNav onAddClick={() => setShowAdd(true)} />
       {showAdd && <QuickAddModal onClose={() => setShowAdd(false)} />}
+
+      <EditBottomSheet
+        open={!!sheet}
+        onClose={closeSheet}
+        onConfirm={v => sheet?.onConfirm(v)}
+        title={sheet?.title || ''}
+        label={sheet?.label || ''}
+        current={sheet?.current ?? ''}
+        hint={sheet?.hint}
+        inputType={sheet?.inputType || 'text'}
+        prefix={sheet?.prefix ?? ''}
+      />
     </div>
   )
 }

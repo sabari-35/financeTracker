@@ -113,10 +113,14 @@ export default function Insights() {
   const unnecessaryByCategory = {}
   monthTxs.filter(t => t.type === 'unnecessary').forEach(t => {
     const cat = t.categories?.name || 'Other'
-    unnecessaryByCategory[cat] = (unnecessaryByCategory[cat] || 0) + Number(t.amount)
+    if (!unnecessaryByCategory[cat]) {
+      unnecessaryByCategory[cat] = { total: 0, txs: [] }
+    }
+    unnecessaryByCategory[cat].total += Number(t.amount)
+    unnecessaryByCategory[cat].txs.push(t)
   })
   const top3Unnecessary = Object.entries(unnecessaryByCategory)
-    .sort((a, b) => b[1] - a[1])
+    .sort((a, b) => b[1].total - a[1].total)
     .slice(0, 3)
 
   // Subscriptions
@@ -170,14 +174,27 @@ export default function Insights() {
             <div className="text-sm font-bold mb-3 flex items-center gap-2" style={{ color: 'var(--text)' }}>
               <AlertCircle size={16} className="text-red-400" /> Top Unnecessary Spends
             </div>
-            {top3Unnecessary.map(([cat, amt], i) => (
-              <div key={cat} className="flex items-center gap-3 mb-2 last:mb-0">
-                <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white"
-                  style={{ background: ['#EF4444','#F97316','#F59E0B'][i] }}>
-                  {i + 1}
+            {top3Unnecessary.map(([cat, data], i) => (
+              <div key={cat} className="mb-4 last:mb-0 border-b border-dashed pb-3 last:border-0 last:pb-0" style={{ borderColor: 'var(--shadow-light)' }}>
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
+                    style={{ background: ['#EF4444','#F97316','#F59E0B'][i] }}>
+                    {i + 1}
+                  </div>
+                  <div className="flex-1 text-sm font-bold" style={{ color: 'var(--text)' }}>{cat}</div>
+                  <div className="text-sm font-bold" style={{ color: '#EF4444' }}>₹{data.total.toLocaleString('en-IN')}</div>
                 </div>
-                <div className="flex-1 text-sm font-medium" style={{ color: 'var(--text)' }}>{cat}</div>
-                <div className="text-sm font-bold" style={{ color: '#EF4444' }}>₹{amt.toLocaleString('en-IN')}</div>
+                {/* Sublist of transactions */}
+                <div className="pl-9 space-y-1.5">
+                  {data.txs.map(tx => (
+                    <div key={tx.id} className="flex justify-between items-center text-xs">
+                      <div className="truncate pr-2" style={{ color: 'var(--sub)' }}>
+                        • {tx.note || tx.merchant_name || 'Unnamed'} <span className="opacity-60 text-[10px]">({tx.payment_method?.toUpperCase()})</span>
+                      </div>
+                      <div className="font-semibold" style={{ color: '#EF4444', opacity: 0.85 }}>₹{Number(tx.amount).toLocaleString('en-IN')}</div>
+                    </div>
+                  ))}
+                </div>
               </div>
             ))}
           </div>

@@ -12,22 +12,23 @@ import { X } from 'lucide-react'
  *   current    – number, current value
  *   hint       – optional string shown below the input
  */
-export default function EditBottomSheet({ open, onClose, onConfirm, title, label, current, hint }) {
-  const [value, setValue] = useState(current ?? 0)
+export default function EditBottomSheet({ open, onClose, onConfirm, title, label, current, hint, inputType = 'number', prefix = '₹' }) {
+  const [value, setValue] = useState(current ?? (inputType === 'number' ? 0 : ''))
   const inputRef = useRef(null)
 
   // Sync draft when sheet opens with a new field
   useEffect(() => {
     if (open) {
-      setValue(current ?? 0)
+      setValue(current ?? (inputType === 'number' ? 0 : ''))
       setTimeout(() => inputRef.current?.focus(), 150)
     }
-  }, [open, current])
+  }, [open, current, inputType])
 
   if (!open) return null
 
   const handleConfirm = () => {
-    onConfirm(Number(value) || 0)
+    const finalValue = inputType === 'number' ? (Number(value) || 0) : value;
+    onConfirm(finalValue)
     onClose()
   }
 
@@ -70,22 +71,24 @@ export default function EditBottomSheet({ open, onClose, onConfirm, title, label
 
           {/* Input */}
           <div className="relative mb-2">
-            <span
-              className="absolute left-4 top-1/2 -translate-y-1/2 text-lg font-bold select-none"
-              style={{ color: '#F97316' }}
-            >
-              ₹
-            </span>
+            {prefix && (
+              <span
+                className="absolute left-4 top-1/2 -translate-y-1/2 text-lg font-bold select-none"
+                style={{ color: '#F97316' }}
+              >
+                {prefix}
+              </span>
+            )}
             <input
               ref={inputRef}
-              type="number"
-              min={0}
+              type={inputType}
+              min={inputType === 'number' ? 0 : undefined}
               value={value}
               onChange={e => setValue(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') handleConfirm() }}
-              className="neu-input pl-9 text-xl font-bold"
+              className={`neu-input ${prefix ? 'pl-9' : 'pl-4'} text-xl font-bold`}
               style={{ color: 'var(--text)', paddingTop: '0.85rem', paddingBottom: '0.85rem' }}
-              placeholder="0"
+              placeholder={inputType === 'number' ? '0' : 'Add a note...'}
             />
           </div>
 

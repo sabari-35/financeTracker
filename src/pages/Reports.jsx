@@ -183,13 +183,46 @@ export default function Reports() {
           </div>
 
           {/* Transaction count */}
-          <div className="neu-card p-4 mb-4 flex justify-between items-center">
-            <div>
-              <div className="text-sm font-bold" style={{ color: 'var(--text)' }}>Transactions</div>
-              <div className="text-xs" style={{ color: 'var(--sub)' }}>This month</div>
-            </div>
-            <div className="text-2xl font-bold" style={{ color: '#F97316' }}>{monthTxs.length}</div>
-          </div>
+          {(() => {
+            const counts = { cash: 0, upi: 0, card: 0 }
+            monthTxs.forEach(t => {
+              const m = t.payment_method || 'upi'
+              counts[m] = (counts[m] || 0) + 1
+            })
+            return (
+              <div className="neu-card p-4 mb-4">
+                <div className="flex justify-between items-center mb-3">
+                  <div>
+                    <div className="text-sm font-bold" style={{ color: 'var(--text)' }}>Transactions</div>
+                    <div className="text-xs" style={{ color: 'var(--sub)' }}>This month</div>
+                  </div>
+                  <div className="text-2xl font-bold" style={{ color: '#F97316' }}>{monthTxs.length}</div>
+                </div>
+                
+                {monthTxs.length > 0 && (
+                  <div className="flex items-center justify-between border-t pt-3" style={{ borderColor: 'var(--shadow-dark)' }}>
+                    <div className="flex-1 text-center">
+                      <div className="text-lg mb-0.5">💵</div>
+                      <div className="text-[10px] font-medium mb-0.5" style={{ color: 'var(--sub)' }}>Cash</div>
+                      <div className="text-sm font-bold" style={{ color: '#22C55E' }}>{counts.cash}</div>
+                    </div>
+                    <div className="w-px h-10 bg-[var(--shadow-dark)] opacity-50" />
+                    <div className="flex-1 text-center">
+                      <div className="text-lg mb-0.5">📲</div>
+                      <div className="text-[10px] font-medium mb-0.5" style={{ color: 'var(--sub)' }}>UPI</div>
+                      <div className="text-sm font-bold" style={{ color: '#3B82F6' }}>{counts.upi}</div>
+                    </div>
+                    <div className="w-px h-10 bg-[var(--shadow-dark)] opacity-50" />
+                    <div className="flex-1 text-center">
+                      <div className="text-lg mb-0.5">💳</div>
+                      <div className="text-[10px] font-medium mb-0.5" style={{ color: 'var(--sub)' }}>Card</div>
+                      <div className="text-sm font-bold" style={{ color: '#A855F7' }}>{counts.card}</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
         </div>
 
         {/* Export PDF */}
