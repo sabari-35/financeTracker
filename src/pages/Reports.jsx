@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { Download, ChevronLeft, ChevronRight, IndianRupee, Landmark, ShieldCheck, Flame, Banknote, Smartphone, CreditCard } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -16,8 +16,13 @@ const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct
 const COLORS = ['#F97316','#22C55E','#3B82F6','#A855F7','#EF4444','#F59E0B','#EC4899','#6B7280']
 
 export default function Reports() {
-  const { user, profile } = useAuthStore()
-  const { fetchAll, getStats, getMonthTransactions, categories, transactions } = useFinanceStore()
+  const user = useAuthStore(state => state.user)
+  const profile = useAuthStore(state => state.profile)
+  const fetchAll = useFinanceStore(state => state.fetchAll)
+  const getStats = useFinanceStore(state => state.getStats)
+  const getMonthTransactions = useFinanceStore(state => state.getMonthTransactions)
+  const categories = useFinanceStore(state => state.categories)
+  const transactions = useFinanceStore(state => state.transactions)
   const [showAdd, setShowAdd] = useState(false)
   const [viewMonth, setViewMonth] = useState(new Date().getMonth())
   const [viewYear, setViewYear] = useState(new Date().getFullYear())
@@ -28,31 +33,36 @@ export default function Reports() {
     if (user?.id) fetchAll(user.id)
   }, [user?.id])
 
-  const stats = getStats(viewMonth + 1, viewYear)
-  const monthTxs = getMonthTransactions(viewMonth + 1, viewYear)
+  const stats = useMemo(() => getStats(viewMonth + 1, viewYear), [viewMonth, viewYear, transactions, getStats])
+  const monthTxs = useMemo(() => getMonthTransactions(viewMonth + 1, viewYear), [viewMonth, viewYear, transactions, getMonthTransactions])
 
   // Pie chart data
-  const catSpend = {}
-  monthTxs.forEach(t => {
-    const cat = t.categories?.name || 'Other'
-    catSpend[cat] = (catSpend[cat] || 0) + Number(t.amount)
-  })
-  const pieData = Object.entries(catSpend).map(([name, value]) => ({ name, value }))
+  const pieData = useMemo(() => {
+    const catSpend = {}
+    monthTxs.forEach(t => {
+      const cat = t.categories?.name || 'Other'
+      catSpend[cat] = (catSpend[cat] || 0) + Number(t.amount)
+    })
+    return Object.entries(catSpend).map(([name, value]) => ({ name, value }))
+  }, [monthTxs])
 
   // 6-month line chart
-  const lineData = []
-  for (let i = 5; i >= 0; i--) {
-    let m = viewMonth + 1 - i
-    let y = viewYear
-    if (m <= 0) { m += 12; y -= 1 }
-    const s = getStats(m, y)
-    lineData.push({
-      month: MONTHS_SHORT[m - 1],
-      necessary: Math.round(s.necessary),
-      unnecessary: Math.round(s.unnecessary),
-      total: Math.round(s.totalSpent),
-    })
-  }
+  const lineData = useMemo(() => {
+    const data = []
+    for (let i = 5; i >= 0; i--) {
+      let m = viewMonth + 1 - i
+      let y = viewYear
+      if (m <= 0) { m += 12; y -= 1 }
+      const s = getStats(m, y)
+      data.push({
+        month: MONTHS_SHORT[m - 1],
+        necessary: Math.round(s.necessary),
+        unnecessary: Math.round(s.unnecessary),
+        total: Math.round(s.totalSpent),
+      })
+    }
+    return data
+  }, [viewMonth, viewYear, transactions, getStats])
 
   const prevMonth = () => {
     if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1) }
@@ -184,11 +194,15 @@ export default function Reports() {
 
           {/* Transaction count */}
           {(() => {
-            const counts = { cash: 0, upi: 0, card: 0 }
-            monthTxs.forEach(t => {
-              const m = t.payment_method || 'upi'
-              counts[m] = (counts[m] || 0) + 1
-            })
+            const counts = useMemo(() => {
+              const c = { cash: 0, upi: 0, card: 0 }
+              monthTxs.forEach(t => {
+                const m = t.payment_method || 'upi'
+                c[m] = (c[m] || 0) + 1
+              })
+              return c
+            }, [monthTxs])
+            
             return (
               <div className="neu-card p-4 mb-4">
                 <div className="flex justify-between items-center mb-3">

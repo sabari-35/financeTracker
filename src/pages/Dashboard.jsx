@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowUpRight, ArrowDownRight, ChevronRight, Wallet, IndianRupee, ShieldCheck, Flame, Banknote, Smartphone, CreditCard } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
@@ -11,8 +11,13 @@ import CircularProgress from '../components/ui/CircularProgress'
 import QuickAddModal from '../components/QuickAdd/QuickAddModal'
 
 export default function Dashboard() {
-  const { user, profile } = useAuthStore()
-  const { fetchAll, getStats, getMonthTransactions, transactions, loading } = useFinanceStore()
+  const user = useAuthStore(state => state.user)
+  const profile = useAuthStore(state => state.profile)
+  const fetchAll = useFinanceStore(state => state.fetchAll)
+  const getStats = useFinanceStore(state => state.getStats)
+  const getMonthTransactions = useFinanceStore(state => state.getMonthTransactions)
+  const transactions = useFinanceStore(state => state.transactions)
+  const loading = useFinanceStore(state => state.loading)
   const [showAdd, setShowAdd] = useState(false)
   const navigate = useNavigate()
 
@@ -28,21 +33,25 @@ export default function Dashboard() {
     if (user?.id) fetchAll(user.id)
   }, [user?.id])
 
-  const stats = getStats(month, year)
-  const lastStats = getStats(lastMonth, lastYear)
+  const stats = useMemo(() => getStats(month, year), [month, year, transactions, getStats])
+  const lastStats = useMemo(() => getStats(lastMonth, lastYear), [lastMonth, lastYear, transactions, getStats])
   const scoreTrend = stats.score - lastStats.score
-  const monthTxs = getMonthTransactions(month, year)
-  const recentTxs = monthTxs.slice(0, 5)
+  const monthTxs = useMemo(() => getMonthTransactions(month, year), [month, year, transactions, getMonthTransactions])
+  const recentTxs = useMemo(() => monthTxs.slice(0, 5), [monthTxs])
 
   const budget = profile?.monthly_budget || 0
   const balance = budget - stats.totalSpent
 
   // Wallet spending this month
-  const spentByMethod = { cash: 0, upi: 0, card: 0 }
-  monthTxs.forEach(t => {
-    const m = t.payment_method || 'upi'
-    spentByMethod[m] = (spentByMethod[m] || 0) + Number(t.amount)
-  })
+  const spentByMethod = useMemo(() => {
+    const spent = { cash: 0, upi: 0, card: 0 }
+    monthTxs.forEach(t => {
+      const m = t.payment_method || 'upi'
+      spent[m] = (spent[m] || 0) + Number(t.amount)
+    })
+    return spent
+  }, [monthTxs])
+  
   const cashLeft = (profile?.cash_balance || 0) - spentByMethod.cash
   const upiLeft  = (profile?.upi_balance  || 0) - spentByMethod.upi
   const cardLeft = (profile?.card_balance  || 0) - spentByMethod.card

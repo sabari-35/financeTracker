@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { RefreshCw, TrendingDown, AlertCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -41,12 +41,16 @@ function TipCard({ tip, index }) {
 }
 
 export default function Insights() {
-  const { user } = useAuthStore()
-  const { fetchAll, transactions, categories, getMonthTransactions, getStats } = useFinanceStore()
+  const user = useAuthStore(state => state.user)
+  const fetchAll = useFinanceStore(state => state.fetchAll)
+  const transactions = useFinanceStore(state => state.transactions)
+  const categories = useFinanceStore(state => state.categories)
+  const getMonthTransactions = useFinanceStore(state => state.getMonthTransactions)
+  const getStats = useFinanceStore(state => state.getStats)
+
   const [showAdd, setShowAdd] = useState(false)
   const [aiTips, setAiTips] = useState([])
   const [aiLoading, setAiLoading] = useState(false)
-  const [chartData, setChartData] = useState([])
 
   const now = new Date()
   const month = now.getMonth() + 1
@@ -57,13 +61,12 @@ export default function Insights() {
   }, [user?.id])
 
   useEffect(() => {
-    if (transactions.length > 0) {
-      buildChartData()
+    if (transactions.length > 0 && aiTips.length === 0) {
       fetchAITips()
     }
   }, [transactions.length])
 
-  const buildChartData = () => {
+  const chartData = useMemo(() => {
     const data = []
     for (let i = 5; i >= 0; i--) {
       let m = month - i
@@ -76,8 +79,8 @@ export default function Insights() {
         unnecessary: Math.round(stats.unnecessary),
       })
     }
-    setChartData(data)
-  }
+    return data
+  }, [month, year, transactions, getStats])
 
   const fetchAITips = async () => {
     setAiLoading(true)
@@ -113,25 +116,30 @@ export default function Insights() {
   }
 
   // Top unnecessary categories this month
-  const monthTxs = getMonthTransactions(month, year)
-  const unnecessaryByCategory = {}
-  monthTxs.filter(t => t.type === 'unnecessary').forEach(t => {
-    const cat = t.categories?.name || 'Other'
-    if (!unnecessaryByCategory[cat]) {
-      unnecessaryByCategory[cat] = { total: 0, txs: [] }
-    }
-    unnecessaryByCategory[cat].total += Number(t.amount)
-    unnecessaryByCategory[cat].txs.push(t)
-  })
-  const top3Unnecessary = Object.entries(unnecessaryByCategory)
-    .sort((a, b) => b[1].total - a[1].total)
-    .slice(0, 3)
+  const monthTxs = useMemo(() => getMonthTransactions(month, year), [month, year, transactions, getMonthTransactions])
+  
+  const top3Unnecessary = useMemo(() => {
+    const unnecessaryByCategory = {}
+    monthTxs.filter(t => t.type === 'unnecessary').forEach(t => {
+      const cat = t.categories?.name || 'Other'
+      if (!unnecessaryByCategory[cat]) {
+        unnecessaryByCategory[cat] = { total: 0, txs: [] }
+      }
+      unnecessaryByCategory[cat].total += Number(t.amount)
+      unnecessaryByCategory[cat].txs.push(t)
+    })
+    return Object.entries(unnecessaryByCategory)
+      .sort((a, b) => b[1].total - a[1].total)
+      .slice(0, 3)
+  }, [monthTxs])
 
   // Subscriptions
-  const recurringTxs = transactions.filter(t => t.is_recurring)
-  const uniqueRecurring = Array.from(new Map(recurringTxs.map(t => [t.categories?.name, t])).values())
+  const uniqueRecurring = useMemo(() => {
+    const recurringTxs = transactions.filter(t => t.is_recurring)
+    return Array.from(new Map(recurringTxs.map(t => [t.categories?.name, t])).values())
+  }, [transactions])
 
-  const stats = getStats(month, year)
+  const stats = useMemo(() => getStats(month, year), [month, year, transactions, getStats])
 
   const CustomTooltip = ({ active, payload, label }) => {
     if (!active || !payload?.length) return null

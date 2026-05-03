@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { Search, Trash2, Edit3, Filter, X, Check, Calendar, Clock, CalendarDays, CalendarRange, Settings2, ChevronDown } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '../store/authStore'
@@ -11,8 +11,11 @@ import EditBottomSheet from '../components/ui/EditBottomSheet'
 const FILTERS = ['All', 'Necessary', 'Unnecessary', 'Food', 'Transport', 'Shopping', 'Rent', 'Health', 'Entertainment', 'Subscriptions', 'Other']
 
 export default function Transactions() {
-  const { user } = useAuthStore()
-  const { fetchAll, transactions, deleteTransaction, updateTransaction } = useFinanceStore()
+  const user = useAuthStore(state => state.user)
+  const fetchAll = useFinanceStore(state => state.fetchAll)
+  const transactions = useFinanceStore(state => state.transactions)
+  const deleteTransaction = useFinanceStore(state => state.deleteTransaction)
+  const updateTransaction = useFinanceStore(state => state.updateTransaction)
   const [showAdd, setShowAdd] = useState(false)
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('All')
@@ -47,47 +50,49 @@ export default function Transactions() {
     return date
   }
 
-  const filtered = transactions.filter(t => {
-    const matchSearch = !search || 
-      (t.categories?.name || '').toLowerCase().includes(search.toLowerCase()) ||
-      (t.note || '').toLowerCase().includes(search.toLowerCase())
+  const filtered = useMemo(() => {
+    return transactions.filter(t => {
+      const matchSearch = !search || 
+        (t.categories?.name || '').toLowerCase().includes(search.toLowerCase()) ||
+        (t.note || '').toLowerCase().includes(search.toLowerCase())
 
-    const matchFilter =
-      filter === 'All' ? true :
-      filter === 'Necessary' ? t.type === 'necessary' :
-      filter === 'Unnecessary' ? t.type === 'unnecessary' :
-      (t.categories?.name || 'Other') === filter
+      const matchFilter =
+        filter === 'All' ? true :
+        filter === 'Necessary' ? t.type === 'necessary' :
+        filter === 'Unnecessary' ? t.type === 'unnecessary' :
+        (t.categories?.name || 'Other') === filter
 
-    let matchDate = true
-    const txDate = normalizeDate(t.date)
-    const today = normalizeDate(new Date())
+      let matchDate = true
+      const txDate = normalizeDate(t.date)
+      const today = normalizeDate(new Date())
 
-    if (dateFilter === 'Today') {
-      matchDate = txDate.getTime() === today.getTime()
-    } else if (dateFilter === 'Last 7 Days') {
-      const sevenDaysAgo = new Date(today)
-      sevenDaysAgo.setDate(today.getDate() - 7)
-      matchDate = txDate >= sevenDaysAgo && txDate <= today
-    } else if (dateFilter === 'Last 30 Days') {
-      const thirtyDaysAgo = new Date(today)
-      thirtyDaysAgo.setDate(today.getDate() - 30)
-      matchDate = txDate >= thirtyDaysAgo && txDate <= today
-    } else if (dateFilter === 'Custom') {
-      if (customStart && customEnd) {
-        const start = normalizeDate(customStart)
-        const end = normalizeDate(customEnd)
-        matchDate = txDate >= start && txDate <= end
-      } else if (customStart) {
-        const start = normalizeDate(customStart)
-        matchDate = txDate >= start
-      } else if (customEnd) {
-        const end = normalizeDate(customEnd)
-        matchDate = txDate <= end
+      if (dateFilter === 'Today') {
+        matchDate = txDate.getTime() === today.getTime()
+      } else if (dateFilter === 'Last 7 Days') {
+        const sevenDaysAgo = new Date(today)
+        sevenDaysAgo.setDate(today.getDate() - 7)
+        matchDate = txDate >= sevenDaysAgo && txDate <= today
+      } else if (dateFilter === 'Last 30 Days') {
+        const thirtyDaysAgo = new Date(today)
+        thirtyDaysAgo.setDate(today.getDate() - 30)
+        matchDate = txDate >= thirtyDaysAgo && txDate <= today
+      } else if (dateFilter === 'Custom') {
+        if (customStart && customEnd) {
+          const start = normalizeDate(customStart)
+          const end = normalizeDate(customEnd)
+          matchDate = txDate >= start && txDate <= end
+        } else if (customStart) {
+          const start = normalizeDate(customStart)
+          matchDate = txDate >= start
+        } else if (customEnd) {
+          const end = normalizeDate(customEnd)
+          matchDate = txDate <= end
+        }
       }
-    }
 
-    return matchSearch && matchFilter && matchDate
-  }).sort((a, b) => new Date(b.date) - new Date(a.date))
+      return matchSearch && matchFilter && matchDate
+    }).sort((a, b) => new Date(b.date) - new Date(a.date))
+  }, [transactions, search, filter, dateFilter, customStart, customEnd])
 
   const handleLongPress = (id) => {
     setLongPressed(prev => prev === id ? null : id)

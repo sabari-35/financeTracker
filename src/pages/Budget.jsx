@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { Pencil, Trash2, PlusCircle, Banknote, Smartphone, CreditCard } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '../store/authStore'
@@ -136,8 +136,20 @@ function CategoryCard({ cat, spent, limit, onEdit }) {
 
 /* ── Main page ──────────────────────────────────────────────── */
 export default function Budget() {
-  const { user, profile, updateProfile } = useAuthStore()
-  const { fetchAll, categories, budgets, upsertBudget, transactions, savingsGoals, addSavingsGoal, updateSavingsGoal, deleteSavingsGoal } = useFinanceStore()
+  const user = useAuthStore(state => state.user)
+  const profile = useAuthStore(state => state.profile)
+  const updateProfile = useAuthStore(state => state.updateProfile)
+  
+  const fetchAll = useFinanceStore(state => state.fetchAll)
+  const categories = useFinanceStore(state => state.categories)
+  const budgets = useFinanceStore(state => state.budgets)
+  const upsertBudget = useFinanceStore(state => state.upsertBudget)
+  const transactions = useFinanceStore(state => state.transactions)
+  const savingsGoals = useFinanceStore(state => state.savingsGoals)
+  const addSavingsGoal = useFinanceStore(state => state.addSavingsGoal)
+  const updateSavingsGoal = useFinanceStore(state => state.updateSavingsGoal)
+  const deleteSavingsGoal = useFinanceStore(state => state.deleteSavingsGoal)
+
   const [showAdd, setShowAdd] = useState(false)
 
   /* Budget state */
@@ -161,20 +173,28 @@ export default function Budget() {
   const month = now.getMonth() + 1
   const year  = now.getFullYear()
 
-  const monthTxs = transactions.filter(t => {
+  const monthTxs = useMemo(() => transactions.filter(t => {
     const d = new Date(t.date)
     return d.getMonth() + 1 === month && d.getFullYear() === year
-  })
-  const spentByMethod = { cash: 0, upi: 0, card: 0 }
-  monthTxs.forEach(t => {
-    const m = t.payment_method || 'upi'
-    spentByMethod[m] = (spentByMethod[m] || 0) + Number(t.amount)
-  })
-  const spentByCat = {}
-  monthTxs.forEach(t => {
-    const name = t.categories?.name || 'Other'
-    spentByCat[name] = (spentByCat[name] || 0) + Number(t.amount)
-  })
+  }), [transactions, month, year])
+
+  const spentByMethod = useMemo(() => {
+    const spent = { cash: 0, upi: 0, card: 0 }
+    monthTxs.forEach(t => {
+      const m = t.payment_method || 'upi'
+      spent[m] = (spent[m] || 0) + Number(t.amount)
+    })
+    return spent
+  }, [monthTxs])
+
+  const spentByCat = useMemo(() => {
+    const spent = {}
+    monthTxs.forEach(t => {
+      const name = t.categories?.name || 'Other'
+      spent[name] = (spent[name] || 0) + Number(t.amount)
+    })
+    return spent
+  }, [monthTxs])
 
   const dbCats = categories.length ? categories : CATEGORIES
 
