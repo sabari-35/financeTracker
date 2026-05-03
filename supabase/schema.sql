@@ -1,13 +1,12 @@
 -- ============================================================
--- FinanceTracker — Supabase Schema
--- Run this in Supabase SQL Editor (Dashboard → SQL Editor → New Query)
+-- FinanceTracker — Safe Migration (run this in Supabase SQL Editor)
+-- Safe to re-run: drops existing policies before recreating them
 -- ============================================================
 
--- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ============================================================
--- TABLE: user_profiles (extends auth.users)
+-- TABLE: user_profiles
 -- ============================================================
 CREATE TABLE IF NOT EXISTS public.user_profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -15,6 +14,9 @@ CREATE TABLE IF NOT EXISTS public.user_profiles (
   name TEXT,
   monthly_budget NUMERIC(12,2) DEFAULT 0,
   alert_threshold INTEGER DEFAULT 80,
+  cash_balance NUMERIC(12,2) DEFAULT 0,
+  upi_balance NUMERIC(12,2) DEFAULT 0,
+  card_balance NUMERIC(12,2) DEFAULT 0,
   savings_goal_name TEXT,
   savings_target_amount NUMERIC(12,2) DEFAULT 0,
   savings_current_amount NUMERIC(12,2) DEFAULT 0,
@@ -22,8 +24,23 @@ CREATE TABLE IF NOT EXISTS public.user_profiles (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Add wallet columns if table already existed without them
+ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS cash_balance NUMERIC(12,2) DEFAULT 0;
+ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS upi_balance  NUMERIC(12,2) DEFAULT 0;
+ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS card_balance NUMERIC(12,2) DEFAULT 0;
+ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS alert_threshold INTEGER DEFAULT 80;
+ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS savings_goal_name TEXT;
+ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS savings_target_amount NUMERIC(12,2) DEFAULT 0;
+ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS savings_current_amount NUMERIC(12,2) DEFAULT 0;
+ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS savings_target_date DATE;
+
 ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Users can view own profile" ON public.user_profiles FOR SELECT USING (auth.uid() = id);
+
+DROP POLICY IF EXISTS "Users can view own profile"   ON public.user_profiles;
+DROP POLICY IF EXISTS "Users can update own profile" ON public.user_profiles;
+DROP POLICY IF EXISTS "Users can insert own profile" ON public.user_profiles;
+
+CREATE POLICY "Users can view own profile"   ON public.user_profiles FOR SELECT USING (auth.uid() = id);
 CREATE POLICY "Users can update own profile" ON public.user_profiles FOR UPDATE USING (auth.uid() = id);
 CREATE POLICY "Users can insert own profile" ON public.user_profiles FOR INSERT WITH CHECK (auth.uid() = id);
 
@@ -40,18 +57,19 @@ CREATE TABLE IF NOT EXISTS public.categories (
 );
 
 ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Anyone can view categories" ON public.categories;
 CREATE POLICY "Anyone can view categories" ON public.categories FOR SELECT USING (true);
 
--- Seed default categories
 INSERT INTO public.categories (name, icon, default_type, color, sort_order) VALUES
-  ('Food', '🍕', 'unnecessary', '#F97316', 1),
-  ('Transport', '🚗', 'necessary', '#3B82F6', 2),
-  ('Shopping', '🛍️', 'unnecessary', '#A855F7', 3),
-  ('Rent', '🏠', 'necessary', '#22C55E', 4),
-  ('Health', '💊', 'necessary', '#EF4444', 5),
+  ('Food',          '🍕', 'unnecessary', '#F97316', 1),
+  ('Transport',     '🚗', 'necessary',   '#3B82F6', 2),
+  ('Shopping',      '🛍️', 'unnecessary', '#A855F7', 3),
+  ('Rent',          '🏠', 'necessary',   '#22C55E', 4),
+  ('Health',        '💊', 'necessary',   '#EF4444', 5),
   ('Entertainment', '🎬', 'unnecessary', '#F59E0B', 6),
   ('Subscriptions', '📱', 'unnecessary', '#EC4899', 7),
-  ('Other', '📦', 'necessary', '#6B7280', 8)
+  ('Other',         '📦', 'necessary',   '#6B7280', 8)
 ON CONFLICT DO NOTHING;
 
 -- ============================================================
@@ -72,16 +90,22 @@ CREATE TABLE IF NOT EXISTS public.transactions (
 );
 
 ALTER TABLE public.transactions ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Users can view own transactions" ON public.transactions FOR SELECT USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can view own transactions"   ON public.transactions;
+DROP POLICY IF EXISTS "Users can insert own transactions" ON public.transactions;
+DROP POLICY IF EXISTS "Users can update own transactions" ON public.transactions;
+DROP POLICY IF EXISTS "Users can delete own transactions" ON public.transactions;
+
+CREATE POLICY "Users can view own transactions"   ON public.transactions FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users can insert own transactions" ON public.transactions FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Users can update own transactions" ON public.transactions FOR UPDATE USING (auth.uid() = user_id);
 CREATE POLICY "Users can delete own transactions" ON public.transactions FOR DELETE USING (auth.uid() = user_id);
 
 CREATE INDEX IF NOT EXISTS idx_transactions_user_date ON public.transactions(user_id, date DESC);
-CREATE INDEX IF NOT EXISTS idx_transactions_category ON public.transactions(category_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_category   ON public.transactions(category_id);
 
 -- ============================================================
--- TABLE: budgets (per-category limits per month)
+-- TABLE: budgets
 -- ============================================================
 CREATE TABLE IF NOT EXISTS public.budgets (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -95,7 +119,13 @@ CREATE TABLE IF NOT EXISTS public.budgets (
 );
 
 ALTER TABLE public.budgets ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Users can view own budgets" ON public.budgets FOR SELECT USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can view own budgets"   ON public.budgets;
+DROP POLICY IF EXISTS "Users can insert own budgets" ON public.budgets;
+DROP POLICY IF EXISTS "Users can update own budgets" ON public.budgets;
+DROP POLICY IF EXISTS "Users can delete own budgets" ON public.budgets;
+
+CREATE POLICY "Users can view own budgets"   ON public.budgets FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users can insert own budgets" ON public.budgets FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Users can update own budgets" ON public.budgets FOR UPDATE USING (auth.uid() = user_id);
 CREATE POLICY "Users can delete own budgets" ON public.budgets FOR DELETE USING (auth.uid() = user_id);
@@ -110,7 +140,11 @@ BEGIN
   VALUES (
     NEW.id,
     NEW.email,
-    COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.raw_user_meta_data->>'name', split_part(NEW.email, '@', 1))
+    COALESCE(
+      NEW.raw_user_meta_data->>'full_name',
+      NEW.raw_user_meta_data->>'name',
+      split_part(NEW.email, '@', 1)
+    )
   )
   ON CONFLICT (id) DO NOTHING;
   RETURN NEW;

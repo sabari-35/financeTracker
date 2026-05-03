@@ -37,6 +37,16 @@ export default function Dashboard() {
   const budget = profile?.monthly_budget || 0
   const balance = budget - stats.totalSpent
 
+  // Wallet spending this month
+  const spentByMethod = { cash: 0, upi: 0, card: 0 }
+  monthTxs.forEach(t => {
+    const m = t.payment_method || 'upi'
+    spentByMethod[m] = (spentByMethod[m] || 0) + Number(t.amount)
+  })
+  const cashLeft = (profile?.cash_balance || 0) - spentByMethod.cash
+  const upiLeft  = (profile?.upi_balance  || 0) - spentByMethod.upi
+  const cardLeft = (profile?.card_balance  || 0) - spentByMethod.card
+
   const fmt = (n) => '₹' + Math.abs(n).toLocaleString('en-IN')
 
   return (
@@ -82,6 +92,31 @@ export default function Dashboard() {
               color="#EF4444"
               alert={stats.unnecessary > (budget * 0.3) ? '⚠️ High' : null}
             />
+          </div>
+        )}
+
+        {/* Wallet Strip */}
+        {(profile?.cash_balance > 0 || profile?.upi_balance > 0 || profile?.card_balance > 0) && (
+          <div className="neu-card p-3 mb-4">
+            <div className="text-xs font-bold mb-3" style={{ color: 'var(--sub)' }}>WALLET BALANCES</div>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { label: 'Cash',  icon: '💵', left: cashLeft,  spent: spentByMethod.cash, color: '#22C55E' },
+                { label: 'UPI',   icon: '📲', left: upiLeft,   spent: spentByMethod.upi,  color: '#3B82F6' },
+                { label: 'Card',  icon: '💳', left: cardLeft,  spent: spentByMethod.card, color: '#A855F7' },
+              ].map(w => (
+                <div key={w.label} className="neu-card-sm p-2 text-center">
+                  <div className="text-lg mb-0.5">{w.icon}</div>
+                  <div className="text-[10px] font-medium mb-0.5" style={{ color: 'var(--sub)' }}>{w.label}</div>
+                  <div className="text-sm font-bold" style={{ color: w.left >= 0 ? w.color : '#EF4444' }}>
+                    {w.left >= 0 ? '' : '-'}{fmt(w.left)}
+                  </div>
+                  <div className="text-[10px] mt-0.5" style={{ color: 'var(--sub)' }}>
+                    -{fmt(w.spent)}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
