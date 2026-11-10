@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowUpRight, ArrowDownRight, ChevronRight, Wallet, IndianRupee, ShieldCheck, Flame, Banknote, Smartphone, CreditCard } from 'lucide-react'
+import { ArrowUpRight, ArrowDownRight, ChevronRight, Wallet, IndianRupee, ShieldCheck, Flame, Banknote, Smartphone, CreditCard, Landmark } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
 import { useFinanceStore } from '../store/financeStore'
 import Header from '../components/layout/Header'
@@ -56,6 +56,9 @@ export default function Dashboard() {
   const upiLeft  = (profile?.upi_balance  || 0) - spentByMethod.upi
   const cardLeft = (profile?.card_balance  || 0) - spentByMethod.card
 
+  // True net worth = actual remaining money across all wallets after spending
+  const netWorth = Math.max(0, cashLeft) + Math.max(0, upiLeft) + Math.max(0, cardLeft)
+
   const fmt = (n) => '₹' + Math.abs(n).toLocaleString('en-IN')
 
   return (
@@ -103,6 +106,20 @@ export default function Dashboard() {
             />
           </div>
         )}
+
+        {/* Total Savings (Net Worth) banner */}
+        <div className="neu-card p-4 mb-4 flex items-center justify-between" style={{ borderLeft: '4px solid #A855F7' }}>
+          <div>
+            <div className="text-xs font-bold mb-1" style={{ color: 'var(--sub)' }}>TOTAL SAVINGS (NET WORTH)</div>
+            <div className="text-2xl font-bold" style={{ color: '#A855F7' }}>
+              ₹{netWorth.toLocaleString('en-IN')}
+            </div>
+            <div className="text-[11px] mt-1" style={{ color: 'var(--sub)' }}>All months combined · your wallet balance</div>
+          </div>
+          <div className="icon-box" style={{ background: 'var(--card)' }}>
+            <Landmark size={28} strokeWidth={2} color="#A855F7" />
+          </div>
+        </div>
 
         {/* Wallet Strip */}
         {(profile?.cash_balance > 0 || profile?.upi_balance > 0 || profile?.card_balance > 0) && (

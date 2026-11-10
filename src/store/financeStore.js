@@ -22,8 +22,11 @@ export const useFinanceStore = create((set, get) => ({
   // ── Selectors ──────────────────────────────────────────────
   getMonthTransactions: (month, year) => {
     return get().transactions.filter(t => {
-      const d = new Date(t.date)
-      return d.getMonth() + 1 === month && d.getFullYear() === year
+      // BUG-07 FIX: Parse date string directly to avoid UTC→local timezone shift.
+      // new Date("2026-11-01") is UTC midnight; in timezones behind UTC that shifts
+      // to the previous local day. Split the string instead.
+      const [y, m] = t.date.split('-').map(Number)
+      return m === month && y === year
     })
   },
 
@@ -62,25 +65,31 @@ export const useFinanceStore = create((set, get) => ({
   // ── Loaders ──────────────────────────────────────────────
   fetchAll: async (userId) => {
     set({ loading: true })
-    const [txRes, catRes, budRes, goalsRes] = await Promise.all([
-      supabase.from('transactions').select('*, categories(*)').eq('user_id', userId).order('date', { ascending: false }),
-      supabase.from('categories').select('*').order('sort_order'),
-      supabase.from('budgets').select('*, categories(*)').eq('user_id', userId),
-      supabase.from('savings_goals').select('*').eq('user_id', userId).order('created_at', { ascending: true }),
-    ])
-    // Deduplicate categories by name (safeguard if INSERT ran multiple times)
-    const rawCats = catRes.data || []
-    const uniqueCats = rawCats.length
-      ? [...new Map(rawCats.map(c => [c.name, c])).values()]
-      : CATEGORIES
+    try {
+      const [txRes, catRes, budRes, goalsRes] = await Promise.all([
+        supabase.from('transactions').select('*, categories(*)').eq('user_id', userId).order('date', { ascending: false }),
+        supabase.from('categories').select('*').order('sort_order'),
+        supabase.from('budgets').select('*, categories(*)').eq('user_id', userId),
+        supabase.from('savings_goals').select('*').eq('user_id', userId).order('created_at', { ascending: true }),
+      ])
+      // Deduplicate categories by name (safeguard if INSERT ran multiple times)
+      const rawCats = catRes.data || []
+      const uniqueCats = rawCats.length
+        ? [...new Map(rawCats.map(c => [c.name, c])).values()]
+        : CATEGORIES
 
-    set({
-      transactions: txRes.data || [],
-      categories: uniqueCats,
-      budgets: budRes.data || [],
-      savingsGoals: goalsRes.data || [],
-      loading: false,
-    })
+      set({
+        transactions: txRes.data || [],
+        categories: uniqueCats,
+        budgets: budRes.data || [],
+        savingsGoals: goalsRes.data || [],
+      })
+    } catch (err) {
+      console.error('fetchAll failed:', err)
+    } finally {
+      // BUG-03 FIX: Always clear loading, even on network errors.
+      set({ loading: false })
+    }
   },
 
   // ── Mutations ────────────────────────────────────────────
@@ -110,11 +119,24 @@ export const useFinanceStore = create((set, get) => ({
       .select('*, categories(*)')
       .single()
     if (error) throw error
+    // BUG-01 FIX: Match existing budget by composite key (user_id+category_id+month+year),
+    // NOT by id — the returned row id may not exist in state if this was an insert.
     set(state => {
-      const exists = state.budgets.find(b => b.id === data.id)
+      const exists = state.budgets.find(b =>
+        b.user_id === data.user_id &&
+        b.category_id === data.category_id &&
+        b.month === data.month &&
+        b.year === data.year
+      )
       return {
         budgets: exists
-          ? state.budgets.map(b => b.id === data.id ? data : b)
+          ? state.budgets.map(b =>
+              b.user_id === data.user_id &&
+              b.category_id === data.category_id &&
+              b.month === data.month &&
+              b.year === data.year
+                ? data : b
+            )
           : [...state.budgets, data],
       }
     })

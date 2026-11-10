@@ -4,6 +4,17 @@ import { useAuthStore } from '../../store/authStore'
 import { useThemeStore } from '../../store/themeStore'
 import ThemeToggle from '../ui/ThemeToggle'
 
+// BUG-18 FIX: Google Fonts @import must live in a CSS file or <head>, NOT inside a
+// JSX <style> tag that re-injects on every render. Moved to a module-level injection
+// that runs once per app lifetime.
+if (!document.getElementById('ft-great-vibes-font')) {
+  const link = document.createElement('link')
+  link.id = 'ft-great-vibes-font'
+  link.rel = 'stylesheet'
+  link.href = "https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap"
+  document.head.appendChild(link)
+}
+
 export default function Header() {
   const { profile, signOut } = useAuthStore()
   const now = new Date()
@@ -16,9 +27,6 @@ export default function Header() {
     <div className="mb-2">
       <div className="flex items-center justify-between pt-5 pb-2">
         <div>
-          <style>
-            {`@import url('https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap');`}
-          </style>
           <h1 className="tracking-wide" style={{ 
             fontFamily: "'Great Vibes', cursive", 
             fontSize: '32px',

@@ -105,9 +105,33 @@ export default function Reports() {
   }
 
   const budget = profile?.monthly_budget || 0
-  // Real savings = total wallet money minus what was spent this month
-  const totalWallet = (profile?.cash_balance || 0) + (profile?.upi_balance || 0) + (profile?.card_balance || 0)
-  const savings = totalWallet - stats.totalSpent
+  // Spending per method for the viewed month
+  const spentByMethod = useMemo(() => {
+    const s = { cash: 0, upi: 0, card: 0 }
+    monthTxs.forEach(t => {
+      const m = t.payment_method || 'upi'
+      s[m] = (s[m] || 0) + Number(t.amount)
+    })
+    return s
+  }, [monthTxs])
+  const cashLeft = (profile?.cash_balance || 0) - spentByMethod.cash
+  const upiLeft  = (profile?.upi_balance  || 0) - spentByMethod.upi
+  const cardLeft = (profile?.card_balance  || 0) - spentByMethod.card
+  // True net worth = actual remaining money across all wallets after this month's spending
+  const netWorth = Math.max(0, cashLeft) + Math.max(0, upiLeft) + Math.max(0, cardLeft)
+  // Budget left = what's remaining of your set spending limit
+  const budgetLeft = budget - stats.totalSpent
+
+  // BUG-02 FIX: useMemo must NEVER be called inside an IIFE/callback inside JSX.
+  // Moved transaction count by payment method to a proper top-level useMemo.
+  const txCountByMethod = useMemo(() => {
+    const c = { cash: 0, upi: 0, card: 0 }
+    monthTxs.forEach(t => {
+      const m = t.payment_method || 'upi'
+      c[m] = (c[m] || 0) + 1
+    })
+    return c
+  }, [monthTxs])
 
   return (
     <div className="page">
@@ -128,12 +152,12 @@ export default function Reports() {
 
         <div ref={reportRef}>
           {/* Summary cards */}
-          <div className="grid grid-cols-2 gap-3 mb-4">
+          <div className="grid grid-cols-2 gap-3 mb-3">
             {[
               { label: 'Total Spent', val: stats.totalSpent, color: '#F97316', icon: <IndianRupee size={26} strokeWidth={2.5} color="#F97316" /> },
-              { label: 'Savings', val: savings, color: savings >= 0 ? '#22C55E' : '#EF4444', icon: <Landmark size={26} strokeWidth={2} color={savings >= 0 ? '#22C55E' : '#EF4444'} /> },
               { label: 'Necessary', val: stats.necessary, color: '#22C55E', icon: <ShieldCheck size={26} strokeWidth={2.5} color="#22C55E" /> },
               { label: 'Unnecessary', val: stats.unnecessary, color: '#EF4444', icon: <Flame size={26} strokeWidth={2.5} color="#EF4444" /> },
+              { label: 'Budget Left', val: budgetLeft, color: budgetLeft >= 0 ? '#3B82F6' : '#EF4444', icon: <Landmark size={26} strokeWidth={2} color={budgetLeft >= 0 ? '#3B82F6' : '#EF4444'} />, sub: 'Remaining limit' },
             ].map(s => (
               <div key={s.label} className="neu-card p-4">
                 <div className="icon-box mb-3" style={{ background: 'var(--card)' }}>{s.icon}</div>
@@ -141,8 +165,23 @@ export default function Reports() {
                 <div className="text-2xl font-bold" style={{ color: s.color }}>
                   ₹{Math.abs(s.val).toLocaleString('en-IN')}
                 </div>
+                {s.sub && <div className="text-[10px] mt-1" style={{ color: 'var(--sub)' }}>{s.sub}</div>}
               </div>
             ))}
+          </div>
+
+          {/* Total Savings (Net Worth) — full width banner */}
+          <div className="neu-card p-4 mb-3 flex items-center justify-between" style={{ borderLeft: '4px solid #A855F7' }}>
+            <div>
+              <div className="text-xs font-bold mb-1" style={{ color: 'var(--sub)' }}>TOTAL SAVINGS (NET WORTH)</div>
+              <div className="text-2xl font-bold" style={{ color: '#A855F7' }}>
+                ₹{netWorth.toLocaleString('en-IN')}
+              </div>
+              <div className="text-[11px] mt-1" style={{ color: 'var(--sub)' }}>All months combined · wallet balance</div>
+            </div>
+            <div className="icon-box" style={{ background: 'var(--card)' }}>
+              <Landmark size={28} strokeWidth={2} color="#A855F7" />
+            </div>
           </div>
 
           {/* Spend Score */}
@@ -195,50 +234,37 @@ export default function Reports() {
           </div>
 
           {/* Transaction count */}
-          {(() => {
-            const counts = useMemo(() => {
-              const c = { cash: 0, upi: 0, card: 0 }
-              monthTxs.forEach(t => {
-                const m = t.payment_method || 'upi'
-                c[m] = (c[m] || 0) + 1
-              })
-              return c
-            }, [monthTxs])
-            
-            return (
-              <div className="neu-card p-4 mb-4">
-                <div className="flex justify-between items-center mb-3">
-                  <div>
-                    <div className="text-sm font-bold" style={{ color: 'var(--text)' }}>Transactions</div>
-                    <div className="text-xs" style={{ color: 'var(--sub)' }}>This month</div>
-                  </div>
-                  <div className="text-2xl font-bold" style={{ color: '#F97316' }}>{monthTxs.length}</div>
-                </div>
-                
-                {monthTxs.length > 0 && (
-                  <div className="flex items-center justify-between border-t pt-3" style={{ borderColor: 'var(--shadow-dark)' }}>
-                    <div className="flex-1 text-center flex flex-col items-center">
-                      <div className="mb-1.5"><Banknote size={32} strokeWidth={1.5} color="#15803d" fill="#86efac" style={{ filter: 'drop-shadow(0px 4px 8px rgba(34,197,94,0.4))' }} /></div>
-                      <div className="text-[10px] font-medium mb-0.5" style={{ color: 'var(--sub)' }}>Cash</div>
-                      <div className="text-sm font-bold" style={{ color: '#22C55E' }}>{counts.cash}</div>
-                    </div>
-                    <div className="w-px h-10 bg-[var(--shadow-dark)] opacity-50" />
-                    <div className="flex-1 text-center flex flex-col items-center">
-                      <div className="mb-1.5"><Smartphone size={32} strokeWidth={1.5} color="#1d4ed8" fill="#93c5fd" style={{ filter: 'drop-shadow(0px 4px 8px rgba(59,130,246,0.4))' }} /></div>
-                      <div className="text-[10px] font-medium mb-0.5" style={{ color: 'var(--sub)' }}>UPI</div>
-                      <div className="text-sm font-bold" style={{ color: '#3B82F6' }}>{counts.upi}</div>
-                    </div>
-                    <div className="w-px h-10 bg-[var(--shadow-dark)] opacity-50" />
-                    <div className="flex-1 text-center flex flex-col items-center">
-                      <div className="mb-1.5"><CreditCard size={32} strokeWidth={1.5} color="#7e22ce" fill="#d8b4fe" style={{ filter: 'drop-shadow(0px 4px 8px rgba(168,85,247,0.4))' }} /></div>
-                      <div className="text-[10px] font-medium mb-0.5" style={{ color: 'var(--sub)' }}>Card</div>
-                      <div className="text-sm font-bold" style={{ color: '#A855F7' }}>{counts.card}</div>
-                    </div>
-                  </div>
-                )}
+          <div className="neu-card p-4 mb-4">
+            <div className="flex justify-between items-center mb-3">
+              <div>
+                <div className="text-sm font-bold" style={{ color: 'var(--text)' }}>Transactions</div>
+                <div className="text-xs" style={{ color: 'var(--sub)' }}>This month</div>
               </div>
-            )
-          })()}
+              <div className="text-2xl font-bold" style={{ color: '#F97316' }}>{monthTxs.length}</div>
+            </div>
+            
+            {monthTxs.length > 0 && (
+              <div className="flex items-center justify-between border-t pt-3" style={{ borderColor: 'var(--shadow-dark)' }}>
+                <div className="flex-1 text-center flex flex-col items-center">
+                  <div className="mb-1.5"><Banknote size={32} strokeWidth={1.5} color="#15803d" fill="#86efac" style={{ filter: 'drop-shadow(0px 4px 8px rgba(34,197,94,0.4))' }} /></div>
+                  <div className="text-[10px] font-medium mb-0.5" style={{ color: 'var(--sub)' }}>Cash</div>
+                  <div className="text-sm font-bold" style={{ color: '#22C55E' }}>{txCountByMethod.cash}</div>
+                </div>
+                <div className="w-px h-10 bg-[var(--shadow-dark)] opacity-50" />
+                <div className="flex-1 text-center flex flex-col items-center">
+                  <div className="mb-1.5"><Smartphone size={32} strokeWidth={1.5} color="#1d4ed8" fill="#93c5fd" style={{ filter: 'drop-shadow(0px 4px 8px rgba(59,130,246,0.4))' }} /></div>
+                  <div className="text-[10px] font-medium mb-0.5" style={{ color: 'var(--sub)' }}>UPI</div>
+                  <div className="text-sm font-bold" style={{ color: '#3B82F6' }}>{txCountByMethod.upi}</div>
+                </div>
+                <div className="w-px h-10 bg-[var(--shadow-dark)] opacity-50" />
+                <div className="flex-1 text-center flex flex-col items-center">
+                  <div className="mb-1.5"><CreditCard size={32} strokeWidth={1.5} color="#7e22ce" fill="#d8b4fe" style={{ filter: 'drop-shadow(0px 4px 8px rgba(168,85,247,0.4))' }} /></div>
+                  <div className="text-[10px] font-medium mb-0.5" style={{ color: 'var(--sub)' }}>Card</div>
+                  <div className="text-sm font-bold" style={{ color: '#A855F7' }}>{txCountByMethod.card}</div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Export PDF */}

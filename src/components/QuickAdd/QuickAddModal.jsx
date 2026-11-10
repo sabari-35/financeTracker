@@ -5,7 +5,9 @@ import { useAuthStore } from '../../store/authStore'
 import { useFinanceStore } from '../../store/financeStore'
 
 const CATEGORIES = [
-  { name: 'Food',          icon: '🍕', default_type: 'unnecessary' },
+  // BUG-08 FIX: default_type must match schema.sql seed data exactly.
+  // Food is 'necessary' in DB — was wrongly 'unnecessary' in this fallback.
+  { name: 'Food',          icon: '🍕', default_type: 'necessary' },
   { name: 'Transport',     icon: '🚗', default_type: 'necessary' },
   { name: 'Shopping',      icon: '🛍️', default_type: 'unnecessary' },
   { name: 'Rent',          icon: '🏠', default_type: 'necessary' },

@@ -169,6 +169,9 @@ export default function Budget() {
   const openSheet = (config) => setSheet(config)
   const closeSheet = () => setSheet(null)
 
+  const [actionSheet, setActionSheet] = useState(null)
+  // actionSheet = { goal, type: 'deposit' | 'withdraw' } | null
+
   const now   = new Date()
   const month = now.getMonth() + 1
   const year  = now.getFullYear()
@@ -221,8 +224,10 @@ export default function Budget() {
     catch (e) { toast.error(e.message) }
   }
   const saveCatLimit = async (catName, val) => {
-    const cat = dbCats.find(c => c.name === catName)
-    if (!cat?.id) { toast.error('Category not found'); return }
+    // BUG-04 FIX: Use `categories` from store (which has real UUIDs from DB).
+    // Local CATEGORIES fallback has id:undefined and would always fail.
+    const cat = categories.find(c => c.name === catName)
+    if (!cat?.id) { toast.error('Categories not loaded yet — please wait a moment'); return }
     try {
       await upsertBudget({ user_id: user.id, category_id: cat.id, limit_amount: val, month, year })
       setCategoryLimits(prev => ({ ...prev, [catName]: val }))
@@ -233,6 +238,54 @@ export default function Budget() {
   const totalAvailable =
     (cashBalance + upiBalance + cardBalance) -
     (spentByMethod.cash + spentByMethod.upi + spentByMethod.card)
+
+  /* Savings Action Handler */
+  const handleSavingsAction = async (goalId, amount, type, walletKey) => {
+    const goal = savingsGoals.find(g => g.id === goalId)
+    if (!goal) return
+
+    // BUG-05 FIX: Supabase returns NUMERIC columns as strings — coerce to Number.
+    const currentGoalAmount = Number(goal.current_amount)
+
+    try {
+      if (type === 'deposit') {
+        const walletBalance = Number(profile[walletKey] || 0)
+        const wKey = walletKey.split('_')[0] // 'cash', 'upi', 'card'
+        const spent = spentByMethod[wKey] || 0
+        const available = walletBalance - spent
+
+        if (amount > available) {
+          throw new Error(`Insufficient funds in ${wKey.toUpperCase()}. Available: ₹${available.toLocaleString('en-IN')}`)
+        }
+
+        const newGoalAmt  = currentGoalAmount + amount
+        // BUG-06 FIX: Ensure wallet balance never goes negative.
+        const newWalletBal = walletBalance - amount
+        if (newWalletBal < 0) {
+          throw new Error(`Cannot deposit — wallet balance would go negative.`)
+        }
+
+        await updateSavingsGoal(goalId, { current_amount: newGoalAmt })
+        await updateProfile({ [walletKey]: newWalletBal })
+        toast.success(`₹${amount.toLocaleString('en-IN')} deposited to ${goal.name}! 🎯`)
+      } else {
+        // BUG-05 FIX: compare numbers, not string vs number.
+        if (amount > currentGoalAmount) {
+          throw new Error(`Cannot withdraw more than goal balance (₹${currentGoalAmount.toLocaleString('en-IN')})`)
+        }
+
+        const newGoalAmt   = currentGoalAmount - amount
+        const newWalletBal = Number(profile[walletKey] || 0) + amount
+
+        await updateSavingsGoal(goalId, { current_amount: newGoalAmt })
+        await updateProfile({ [walletKey]: newWalletBal })
+        toast.success(`₹${amount.toLocaleString('en-IN')} withdrawn to ${walletKey.split('_')[0].toUpperCase()}! 💰`)
+      }
+      setActionSheet(null)
+    } catch (e) {
+      toast.error(e.message)
+    }
+  }
 
   return (
     <div className="page">
@@ -363,24 +416,21 @@ export default function Budget() {
                   style={{ width: `${pct}%`, background: '#F59E0B', minWidth: pct > 0 ? 8 : 0 }} />
               </div>
 
-              <button
-                onClick={() => openSheet({
-                  title: `Deposit to ${goal.name}`,
-                  label: 'Amount to Deposit (₹)',
-                  current: 0,
-                  hint: `Remaining: ₹${Math.max(0, goal.target_amount - goal.current_amount).toLocaleString('en-IN')}`,
-                  onConfirm: async (v) => {
-                    try {
-                      const newAmt = Number(goal.current_amount) + Number(v);
-                      await updateSavingsGoal(goal.id, { current_amount: newAmt });
-                      toast.success(`Deposited ₹${v}`);
-                    } catch (e) { toast.error(e.message); }
-                  }
-                })}
-                className="btn-primary w-full py-2.5 flex items-center justify-center gap-2 rounded-xl text-sm font-bold"
-              >
-                Deposit Savings
-              </button>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setActionSheet({ goal, type: 'deposit' })}
+                  className="flex-[2] btn-primary py-2.5 flex items-center justify-center gap-2 rounded-xl text-sm font-bold shadow-lg"
+                >
+                  Deposit
+                </button>
+                <button
+                  onClick={() => setActionSheet({ goal, type: 'withdraw' })}
+                  className="flex-1 py-2.5 flex items-center justify-center gap-2 rounded-xl text-sm font-bold neu-btn"
+                  style={{ color: '#3B82F6' }}
+                >
+                  Withdraw
+                </button>
+              </div>
             </div>
           )
         })}
@@ -432,7 +482,9 @@ export default function Budget() {
         {/* ── Category Limits 2-col grid ────────────────── */}
         <div className="text-xs font-bold mb-2 px-1" style={{ color: 'var(--sub)' }}>CATEGORY LIMITS</div>
         <div className="grid grid-cols-2 gap-3 mb-8">
-          {CATEGORIES.map(cat => (
+          {/* BUG-09 FIX: Use dbCats (from store, with real UUIDs) not the local
+              hardcoded CATEGORIES array, so budget upserts use correct category IDs. */}
+          {dbCats.map(cat => (
             <CategoryCard
               key={cat.name}
               cat={cat}
@@ -463,6 +515,120 @@ export default function Budget() {
         current={sheet?.current ?? 0}
         hint={sheet?.hint}
       />
+
+      {/* ── Savings Action Sheet ─────────────────────── */}
+      <SavingsGoalSheet
+        action={actionSheet}
+        onClose={() => setActionSheet(null)}
+        onAction={handleSavingsAction}
+        profile={profile}
+        spentByMethod={spentByMethod}
+        totalAvailable={totalAvailable}
+        monthlyBudget={monthlyBudget}
+        totalSpent={spentByMethod.cash + spentByMethod.upi + spentByMethod.card}
+      />
     </div>
+  )
+}
+
+/* ── Specialized Savings Goal Sheet ─────────────────────────── */
+function SavingsGoalSheet({ action, onClose, onAction, profile, spentByMethod, totalAvailable, monthlyBudget, totalSpent }) {
+  const [amount, setAmount] = useState('')
+  const [wallet, setWallet] = useState('upi_balance')
+
+  if (!action) return null
+  const { goal, type } = action
+
+  // Actual Savings = Total Cash - (Planned Budget - Already Spent)
+  // This is the "extra" money from previous months.
+  const budgetLeft = Math.max(0, monthlyBudget - totalSpent)
+  const actualSavings = Math.max(0, totalAvailable - budgetLeft)
+
+  const handleSubmit = () => {
+    const num = Number(amount)
+    if (!num || num <= 0) return toast.error('Enter a valid amount')
+
+    if (type === 'deposit' && num > actualSavings) {
+      return toast.error(`You can only deposit from your Actual Savings (₹${actualSavings.toLocaleString()}). The rest is reserved for this month's budget!`)
+    }
+
+    onAction(goal.id, num, type, wallet)
+  }
+
+  return (
+    <>
+      <div className="fixed inset-0 z-40 bg-black/40" onClick={onClose} />
+      <div className="fixed bottom-0 left-0 right-0 z-50 mx-auto max-w-[430px] rounded-t-3xl slide-up p-6 bg-white" style={{ background: 'var(--bg)' }}>
+        <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-6 opacity-30" />
+        
+        <div className="text-lg font-bold mb-1" style={{ color: 'var(--text)' }}>
+          {type === 'deposit' ? 'Deposit Savings' : 'Withdraw from Goal'}
+        </div>
+        <div className="text-sm mb-6" style={{ color: 'var(--sub)' }}>
+          {type === 'deposit' 
+            ? `Move "Carry-over" money into "${goal.name}"` 
+            : `Move money from "${goal.name}" to wallet`}
+        </div>
+
+        {type === 'deposit' && (
+          <div className="p-3 rounded-2xl mb-6 flex justify-between items-center" style={{ background: '#F0F9FF', border: '1px solid #BAE6FD' }}>
+            <div className="flex flex-col">
+              <span className="text-[10px] font-bold text-blue-600 uppercase">Available to Save</span>
+              <span className="text-sm font-bold text-blue-800">₹{actualSavings.toLocaleString('en-IN')}</span>
+            </div>
+            <div className="text-[9px] text-blue-500 max-w-[140px] text-right italic">
+              Money left from past months (Total Balance − Budget Left)
+            </div>
+          </div>
+        )}
+
+        <div className="text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--sub)' }}>Amount (₹)</div>
+        <input
+          type="number"
+          autoFocus
+          className="neu-input text-2xl font-bold mb-6"
+          placeholder="0"
+          value={amount}
+          onChange={e => setAmount(e.target.value)}
+        />
+
+        <div className="text-xs font-bold mb-3 uppercase tracking-wider" style={{ color: 'var(--sub)' }}>
+          {type === 'deposit' ? 'Select Source Wallet' : 'Withdraw To'}
+        </div>
+        <div className="grid grid-cols-3 gap-3 mb-8">
+          {WALLETS.map(w => {
+            const balance = profile[w.key] || 0
+            const spent   = spentByMethod[w.payKey] || 0
+            const left    = balance - spent
+            const active  = wallet === w.key
+            
+            return (
+              <button
+                key={w.key}
+                onClick={() => setWallet(w.key)}
+                className="flex flex-col items-center p-3 rounded-2xl transition-all duration-200"
+                style={{
+                  background: active ? w.color : 'var(--card)',
+                  boxShadow: active ? `0 8px 16px ${w.color}33` : '4px 4px 8px var(--shadow-dark), -4px -4px 8px var(--shadow-light)',
+                  color: active ? '#fff' : 'var(--text)'
+                }}
+              >
+                <div style={{ opacity: active ? 1 : 0.7 }}>{w.icon}</div>
+                <div className="text-[10px] font-bold mt-1 uppercase">{w.label}</div>
+                <div className="text-[9px] mt-0.5 opacity-80">₹{Math.max(0, left).toLocaleString()}</div>
+              </button>
+            )
+          })}
+        </div>
+
+        <button
+          onClick={handleSubmit}
+          className="btn-primary w-full py-4 rounded-2xl text-base font-bold shadow-lg"
+          style={{ background: type === 'deposit' ? '#F97316' : '#3B82F6' }}
+        >
+          {type === 'deposit' ? '🎯 Confirm Deposit' : '💰 Confirm Withdrawal'}
+        </button>
+      </div>
+    </>
   )
 }
